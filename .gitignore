@@ -1,0 +1,8 @@
+venv/
+archive.db
+__pycache__/
+*.pyc
+instance/
+static/uploads/
+.DS_Store
+.claude/

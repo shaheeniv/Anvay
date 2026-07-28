@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{% if unlocked %}{{ capsule['title'] }}{% else %}Sealed Letter{% endif %} — Anvay{% endblock %}
+{% block content %}
+
+  {% if unlocked %}
+    <div class="page-header">
+      <div>
+        <span class="kind-badge kind-unlocked">Unlocked</span>
+        <h1>{{ capsule['title'] }}</h1>
+        <p class="entry-meta">
+          To {{ capsule['recipient_name'] }}{% if capsule['author_name'] %} · from {{ capsule['author_name'] }}{% endif %}
+          · unlocked {{ capsule['unlock_date'] }}
+        </p>
+      </div>
+      <div class="entry-actions">
+        <a class="button" href="{{ url_for('edit_capsule', capsule_id=capsule['id']) }}">Edit</a>
+      </div>
+    </div>
+
+    <div class="transcript-block letter-body">
+      <p class="transcript-text">{{ capsule['body'] }}</p>
+    </div>
+  {% else %}
+    <div class="page-header">
+      <div>
+        <span class="kind-badge kind-sealed">Sealed</span>
+        <h1>A letter to {{ capsule['recipient_name'] }}</h1>
+        <p class="entry-meta">{{ describe_time_until(capsule['unlock_date']) }} · unlocks {{ capsule['unlock_date'] }}</p>
+      </div>
+    </div>
+
+    <p class="empty-state">
+      This letter is sealed until {{ capsule['unlock_date'] }}. Its contents
+      stay hidden until then, and it can't be edited meanwhile — delete and
+      rewrite it if something needs to change.
+    </p>
+  {% endif %}
+
+  <form class="delete-form" method="post" action="{{ url_for('delete_capsule', capsule_id=capsule['id']) }}"
+    onsubmit="return confirm('Delete this letter? This cannot be undone.');">
+    <button type="submit" class="danger-link">Delete this letter</button>
+  </form>
+
+{% endblock %}

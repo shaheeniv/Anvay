@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}{{ person['name'] }} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <div>
+      <h1>{{ person['name'] }}{% if person['surname'] %} <span class="person-surname">{{ person['surname'] }}</span>{% endif %}</h1>
+      {% if person['birth_date'] or person['birth_place'] %}
+        <p class="entry-meta">
+          {%- if person['birth_date'] %}Born {{ person['birth_date'] }}{% endif -%}
+          {%- if person['birth_date'] and person['birth_place'] %} in {% elif person['birth_place'] %}Born in {% endif -%}
+          {%- if person['birth_place'] %}{{ person['birth_place'] }}{% endif -%}
+        </p>
+      {% endif %}
+      {% if person['three_words'] %}
+        <div class="three-words">
+          {% for word in person['three_words'].split(',') %}
+            {% if word.strip() %}<span class="three-words-tag">{{ word.strip() }}</span>{% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    <div class="entry-actions">
+      <a class="button" href="{{ url_for('edit_person', person_id=person['id']) }}">Edit</a>
+    </div>
+  </div>
+
+  {% if person['notes'] %}
+    <p class="person-notes">{{ person['notes'] }}</p>
+  {% endif %}
+
+  <section class="relation-section">
+    <h2>Stories &amp; videos</h2>
+    {% if entries %}
+      <ul class="entry-list">
+        {% for entry in entries %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_entry', entry_id=entry['id']) }}">
+              <span class="entry-date">{{ entry['date_recorded'] }}</span>
+              {% if entry['topic'] %}<span class="entry-topic">{{ entry['topic'] }}</span>{% endif %}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No story entries yet.</p>
+    {% endif %}
+    <a class="small-link" href="{{ url_for('new_entry', person_id=person['id']) }}">+ Log a video entry for {{ person['name'] }}</a>
+  </section>
+
+  <section class="relation-section">
+    <h2>Memories &amp; contributions</h2>
+    {% if contributions %}
+      <ul class="entry-list">
+        {% for c in contributions %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_contribution', contribution_id=c['id']) }}">
+              <span class="kind-badge kind-{{ c['kind'] }}">{{ kind_labels[c['kind']] }}</span>
+              <span class="entry-person">{{ c['title'] }}</span>
+              <span class="entry-date">{{ c['created_at'][:10] }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No contributions yet.</p>
+    {% endif %}
+    <a class="small-link" href="{{ url_for('new_contribution', person_id=person['id']) }}">+ Add a contribution about {{ person['name'] }}</a>
+  </section>
+
+  <section class="relation-section">
+    <h2>Time capsule letters</h2>
+    {% if capsules %}
+      <ul class="entry-list">
+        {% for c in capsules %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_capsule', capsule_id=c['id']) }}">
+              {% if is_unlocked(c['unlock_date']) %}
+                <span class="kind-badge kind-unlocked">Unlocked</span>
+                <span class="entry-person">{{ c['title'] }}</span>
+                <span class="entry-date">unlocked {{ c['unlock_date'] }}</span>
+              {% else %}
+                <span class="kind-badge kind-sealed">Sealed</span>
+                <span class="entry-person">A sealed letter</span>
+                <span class="entry-date">{{ describe_time_until(c['unlock_date']) }}</span>
+              {% endif %}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No letters addressed to {{ person['name'] }} yet.</p>
+    {% endif %}
+    <a class="small-link" href="{{ url_for('new_capsule', person_id=person['id']) }}">+ Write a letter to {{ person['name'] }}</a>
+  </section>
+
+  <section class="relation-section">
+    <h2>Parents</h2>
+    {% if parents %}
+      <ul class="relation-list">
+        {% for parent in parents %}
+          <li>
+            <a href="{{ url_for('show_person', person_id=parent['id']) }}">{{ parent['name'] }}</a>
+            <form method="post" action="{{ url_for('remove_parent_child') }}" class="inline-remove">
+              <input type="hidden" name="parent_id" value="{{ parent['id'] }}">
+              <input type="hidden" name="child_id" value="{{ person['id'] }}">
+              <input type="hidden" name="return_to" value="{{ person['id'] }}">
+              <button type="submit" class="danger-link">remove</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No parents recorded yet.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('add_parent', person_id=person['id']) }}" class="relation-form">
+      <select name="existing_id">
+        <option value="">— choose existing person —</option>
+        {% for p in all_people %}<option value="{{ p['id'] }}">{{ p['name'] }}</option>{% endfor %}
+      </select>
+      <span class="hint">or</span>
+      <input type="text" name="new_name" placeholder="Add a new person as a parent">
+      <button type="submit" class="small-button">Add</button>
+    </form>
+  </section>
+
+  <section class="relation-section">
+    <h2>Spouse / Partner</h2>
+    {% if spouses %}
+      <ul class="relation-list">
+        {% for spouse in spouses %}
+          <li>
+            <a href="{{ url_for('show_person', person_id=spouse['id']) }}">{{ spouse['name'] }}</a>
+            <form method="post" action="{{ url_for('remove_spouse') }}" class="inline-remove">
+              <input type="hidden" name="person_a_id" value="{{ person['id'] }}">
+              <input type="hidden" name="person_b_id" value="{{ spouse['id'] }}">
+              <input type="hidden" name="return_to" value="{{ person['id'] }}">
+              <button type="submit" class="danger-link">remove</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No spouse/partner recorded yet.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('add_spouse', person_id=person['id']) }}" class="relation-form">
+      <select name="existing_id">
+        <option value="">— choose existing person —</option>
+        {% for p in all_people %}<option value="{{ p['id'] }}">{{ p['name'] }}</option>{% endfor %}
+      </select>
+      <span class="hint">or</span>
+      <input type="text" name="new_name" placeholder="Add a new person as spouse/partner">
+      <button type="submit" class="small-button">Add</button>
+    </form>
+  </section>
+
+  <section class="relation-section">
+    <h2>Children</h2>
+    {% if children %}
+      <ul class="relation-list">
+        {% for child in children %}
+          <li>
+            <a href="{{ url_for('show_person', person_id=child['id']) }}">{{ child['name'] }}</a>
+            <form method="post" action="{{ url_for('remove_parent_child') }}" class="inline-remove">
+              <input type="hidden" name="parent_id" value="{{ person['id'] }}">
+              <input type="hidden" name="child_id" value="{{ child['id'] }}">
+              <input type="hidden" name="return_to" value="{{ person['id'] }}">
+              <button type="submit" class="danger-link">remove</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No children recorded yet.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('add_child', person_id=person['id']) }}" class="relation-form">
+      <select name="existing_id">
+        <option value="">— choose existing person —</option>
+        {% for p in all_people %}<option value="{{ p['id'] }}">{{ p['name'] }}</option>{% endfor %}
+      </select>
+      <span class="hint">or</span>
+      <input type="text" name="new_name" placeholder="Add a new person as a child">
+      <button type="submit" class="small-button">Add</button>
+    </form>
+  </section>
+
+  <form class="delete-form" method="post" action="{{ url_for('delete_person', person_id=person['id']) }}"
+    onsubmit="return confirm('Delete {{ person['name'] }} from the family tree? This cannot be undone.');">
+    <button type="submit" class="danger-link">Delete this person</button>
+  </form>
+
+{% endblock %}

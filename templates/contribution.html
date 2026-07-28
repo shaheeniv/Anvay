@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ contribution['title'] }} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <div>
+      <span class="kind-badge kind-{{ contribution['kind'] }}">{{ kind_labels[contribution['kind']] }}</span>
+      <h1>{{ contribution['title'] }}</h1>
+      <p class="entry-meta">
+        {{ contribution['created_at'][:10] }}
+        {% if contribution['author_name'] %} · added by {{ contribution['author_name'] }}{% endif %}
+      </p>
+    </div>
+    <div class="entry-actions">
+      <a class="button" href="{{ url_for('edit_contribution', contribution_id=contribution['id']) }}">Edit</a>
+    </div>
+  </div>
+
+  {% if contribution['photo_filename'] %}
+    <p class="contribution-photo">
+      <img src="{{ url_for('static', filename='uploads/' ~ contribution['photo_filename']) }}" alt="{{ contribution['title'] }}">
+    </p>
+  {% endif %}
+
+  {% if contribution['body'] %}
+    <div class="transcript-block">
+      <p class="transcript-text">{{ contribution['body'] }}</p>
+    </div>
+  {% endif %}
+
+  {% if linked_people %}
+    <section class="relation-section">
+      <h2>About</h2>
+      <ul class="relation-list">
+        {% for person in linked_people %}
+          <li><a href="{{ url_for('show_person', person_id=person['id']) }}">{{ person['name'] }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <form class="delete-form" method="post" action="{{ url_for('delete_contribution', contribution_id=contribution['id']) }}"
+    onsubmit="return confirm('Delete this contribution? This cannot be undone.');">
+    <button type="submit" class="danger-link">Delete this contribution</button>
+  </form>
+
+{% endblock %}

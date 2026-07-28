@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{% if capsule %}Edit Letter{% else %}Write a Letter{% endif %} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>{% if capsule %}Edit Letter{% else %}Write a Time Capsule Letter{% endif %}</h1>
+  </div>
+
+  {% if people %}
+  <form
+    class="entry-form"
+    method="post"
+    action="{% if capsule %}{{ url_for('update_capsule', capsule_id=capsule['id']) }}{% else %}{{ url_for('create_capsule') }}{% endif %}"
+  >
+    <label for="recipient_id">Addressed to</label>
+    <select id="recipient_id" name="recipient_id" required>
+      <option value="" disabled {% if not capsule and not preselect_recipient_id %}selected{% endif %}>— choose who this is for —</option>
+      {% for person in people %}
+        <option value="{{ person['id'] }}"
+          {% if capsule and capsule['recipient_id'] == person['id'] %}selected{% endif %}
+          {% if not capsule and preselect_recipient_id == person['id'] %}selected{% endif %}>
+          {{ person['name'] }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <label for="author_id">From <span class="hint">(optional)</span></label>
+    <select id="author_id" name="author_id">
+      <option value="">— choose who's writing it —</option>
+      {% for person in people %}
+        <option value="{{ person['id'] }}" {% if capsule and capsule['author_id'] == person['id'] %}selected{% endif %}>
+          {{ person['name'] }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <label for="title">Title <span class="hint">(kept hidden while sealed — e.g. an occasion, not a spoiler)</span></label>
+    <input type="text" id="title" name="title" required
+      placeholder="e.g. For your 18th birthday"
+      value="{{ capsule['title'] if capsule else '' }}">
+
+    <label for="unlock_date">Unlock date</label>
+    <input type="date" id="unlock_date" name="unlock_date" required
+      value="{{ capsule['unlock_date'] if capsule else '' }}">
+
+    <label for="body">The letter</label>
+    <textarea id="body" name="body" rows="12" required
+      placeholder="Write it as if they're reading it on that day…">{{ capsule['body'] if capsule else '' }}</textarea>
+
+    <div class="form-actions">
+      <button type="submit" class="button">{% if capsule %}Save changes{% else %}Seal this letter{% endif %}</button>
+      <a class="cancel-link" href="{% if capsule %}{{ url_for('show_capsule', capsule_id=capsule['id']) }}{% else %}{{ url_for('capsules') }}{% endif %}">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+    <p class="hint">No one's in the family tree yet — <a href="{{ url_for('new_person') }}">add a person</a> first.</p>
+  {% endif %}
+
+{% endblock %}

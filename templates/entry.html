@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ entry['person'] }} — {{ entry['date_recorded'] }} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <div>
+      <h1><a href="{{ url_for('show_person', person_id=entry['person_id']) }}">{{ entry['person_name'] }}</a></h1>
+      <p class="entry-meta">{{ entry['date_recorded'] }}{% if entry['topic'] %} · {{ entry['topic'] }}{% endif %}</p>
+    </div>
+    <div class="entry-actions">
+      <a class="button" href="{{ url_for('edit_entry', entry_id=entry['id']) }}">Edit</a>
+    </div>
+  </div>
+
+  {% if entry['video_link'] %}
+    <p class="video-link">
+      <a href="{{ entry['video_link'] }}" target="_blank" rel="noopener noreferrer">▶ Watch the video</a>
+    </p>
+  {% endif %}
+
+  <div class="transcript-columns">
+    <div class="transcript-block">
+      <h2>Gujarati (original)</h2>
+      <p class="transcript-text">{{ entry['gujarati_transcript'] or "—" }}</p>
+    </div>
+    <div class="transcript-block">
+      <h2>English translation</h2>
+      <p class="transcript-text">{{ entry['english_translation'] or "—" }}</p>
+    </div>
+  </div>
+
+  <form class="delete-form" method="post" action="{{ url_for('delete_entry', entry_id=entry['id']) }}"
+    onsubmit="return confirm('Delete this entry? This cannot be undone.');">
+    <button type="submit" class="danger-link">Delete this entry</button>
+  </form>
+
+{% endblock %}

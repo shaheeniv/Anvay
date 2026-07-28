@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Stories & Videos — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>Stories &amp; Videos</h1>
+    <a class="button" href="{{ url_for('new_entry') }}">+ Log a new entry</a>
+  </div>
+
+  <form class="search-bar" method="get" action="{{ url_for('stories') }}">
+    <input type="text" name="q" placeholder="Search by person, topic, or keyword…" value="{{ q }}">
+    <button type="submit">Search</button>
+    {% if q %}<a class="clear-link" href="{{ url_for('stories') }}">Clear</a>{% endif %}
+  </form>
+
+  {% if entries %}
+    <ul class="entry-list">
+      {% for entry in entries %}
+        <li class="entry-card">
+          <a href="{{ url_for('show_entry', entry_id=entry['id']) }}">
+            <span class="entry-person">{{ entry['person_name'] }}</span>
+            <span class="entry-date">{{ entry['date_recorded'] }}</span>
+            {% if entry['topic'] %}<span class="entry-topic">{{ entry['topic'] }}</span>{% endif %}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty-state">
+      {% if q %}
+        No entries match “{{ q }}”.
+      {% else %}
+        No entries yet. Start by logging the first video recording.
+      {% endif %}
+    </p>
+  {% endif %}
+
+{% endblock %}

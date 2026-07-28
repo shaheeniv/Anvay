@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ year }} Almanac — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header no-print">
+    <h1>{{ year }} Almanac</h1>
+    <button class="button" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+  <div class="almanac-year-nav no-print">
+    <a href="{% if older_year %}{{ url_for('almanac', year=older_year) }}{% else %}#{% endif %}"
+       class="{{ 'disabled' if not older_year }}">&larr; {{ older_year or '' }}</a>
+    <span class="almanac-current-year">{{ year }}</span>
+    <a href="{% if newer_year %}{{ url_for('almanac', year=newer_year) }}{% else %}#{% endif %}"
+       class="{{ 'disabled' if not newer_year }}">{{ newer_year or '' }} &rarr;</a>
+  </div>
+
+  <h1 class="almanac-print-title print-only">The Anvay — {{ year }}</h1>
+
+  {% if not videos and not contributions and not capsules and not new_people %}
+    <p class="empty-state">Nothing recorded for {{ year }} yet.</p>
+  {% endif %}
+
+  {% if new_people %}
+    <section class="relation-section">
+      <h2>New in the family tree</h2>
+      <ul class="relation-list">
+        {% for person in new_people %}
+          <li><a href="{{ url_for('show_person', person_id=person['id']) }}">{{ person['name'] }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if videos %}
+    <section class="relation-section">
+      <h2>Stories &amp; videos recorded this year</h2>
+      <ul class="entry-list">
+        {% for entry in videos %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_entry', entry_id=entry['id']) }}">
+              <span class="entry-person">{{ entry['person_name'] }}</span>
+              <span class="entry-date">{{ entry['date_recorded'] }}</span>
+              {% if entry['topic'] %}<span class="entry-topic">{{ entry['topic'] }}</span>{% endif %}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if contributions %}
+    <section class="relation-section">
+      <h2>Contributions added this year</h2>
+      <ul class="entry-list">
+        {% for c in contributions %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_contribution', contribution_id=c['id']) }}">
+              <span class="kind-badge kind-{{ c['kind'] }}">{{ kind_labels[c['kind']] }}</span>
+              <span class="entry-person">{{ c['title'] }}</span>
+              <span class="entry-date">{{ c['created_at'][:10] }}{% if c['author_name'] %} · {{ c['author_name'] }}{% endif %}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if capsules %}
+    <section class="relation-section">
+      <h2>Letters that opened this year</h2>
+      <ul class="entry-list">
+        {% for c in capsules %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_capsule', capsule_id=c['id']) }}">
+              <span class="kind-badge kind-unlocked">Unlocked</span>
+              <span class="entry-person">{{ c['title'] }}</span>
+              <span class="entry-date">To {{ c['recipient_name'] }} · {{ c['unlock_date'] }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+{% endblock %}

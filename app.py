@@ -1,0 +1,1083 @@
+"""
+Anvay — story & video log + family tree + contribution feed +
+time capsule letters
+
+A small local website (Flask + SQLite) for recording video interviews with
+grandparents (transcript + translation), keeping a living family tree
+(people, their parents/children/spouses), a contribution feed where any
+family member can add a memory, photo, story, tradition, or note, and
+time capsule letters sealed until a future date.
+
+Run it with: python3 app.py   (or double-click "Open Anvay.command")
+Then open: http://127.0.0.1:5000
+"""
+
+import os
+import secrets
+import sqlite3
+import uuid
+from collections import defaultdict
+from datetime import date
+from functools import wraps
+from pathlib import Path
+
+from flask import Flask, flash, g, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
+BASE_DIR = Path(__file__).resolve().parent
+
+# Where the database lives — on a normal local run this is just BASE_DIR,
+# but a hosted deployment sets DATA_DIR to a persistent disk mount so the
+# data survives redeploys (a container's own filesystem is wiped on every
+# redeploy). Uploaded photos stay under static/uploads/ regardless, since
+# Flask's static file serving needs them at a fixed path relative to the
+# app — a hosted deployment should mount its persistent disk *at* that
+# exact path rather than somewhere else (see README).
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR)))
+DATABASE = DATA_DIR / "archive.db"
+SCHEMA = BASE_DIR / "schema.sql"
+UPLOAD_DIR = BASE_DIR / "static" / "uploads"
+ALLOWED_PHOTO_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+CONTRIBUTION_KINDS = [
+    ("memory", "Memory"),
+    ("photo", "Photo"),
+    ("story", "Story"),
+    ("tradition", "Tradition"),
+    ("note", "Note"),
+]
+CONTRIBUTION_KIND_LABELS = dict(CONTRIBUTION_KINDS)
+
+
+def _load_or_create_secret_key():
+    """A stable secret key, so logging in doesn't get everyone signed out
+    every time the server restarts. In production set SECRET_KEY as a real
+    environment variable; for local dev, generate one once and cache it in
+    a gitignored file so it survives across `python3 app.py` restarts."""
+    env_key = os.environ.get("SECRET_KEY")
+    if env_key:
+        return env_key
+    key_path = BASE_DIR / "instance" / "secret_key.txt"
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    if key_path.exists():
+        return key_path.read_text().strip()
+    new_key = secrets.token_hex(32)
+    key_path.write_text(new_key)
+    return new_key
+
+
+app = Flask(__name__)
+app.secret_key = _load_or_create_secret_key()
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB per upload
+
+
+def get_db():
+    if "db" not in g:
+        g.db = sqlite3.connect(DATABASE)
+        g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA foreign_keys = ON")
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(exception=None):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
+
+
+def init_db():
+    db = sqlite3.connect(DATABASE)
+    db.executescript(SCHEMA.read_text())
+    db.commit()
+    db.close()
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+def dashboard():
+    db = get_db()
+
+    stats = {
+        "people": db.execute("SELECT COUNT(*) AS c FROM people").fetchone()["c"],
+        "videos": db.execute("SELECT COUNT(*) AS c FROM video_entries").fetchone()["c"],
+        "contributions": db.execute("SELECT COUNT(*) AS c FROM contributions").fetchone()["c"],
+        "capsules_sealed": 0,
+        "capsules_unlocked": 0,
+    }
+    for row in db.execute("SELECT unlock_date FROM time_capsules"):
+        if is_unlocked(row["unlock_date"]):
+            stats["capsules_unlocked"] += 1
+        else:
+            stats["capsules_sealed"] += 1
+
+    activity = []
+
+    for row in db.execute(
+        """
+        SELECT video_entries.id, video_entries.topic, video_entries.created_at,
+               people.name AS person_name
+        FROM video_entries
+        JOIN people ON people.id = video_entries.person_id
+        ORDER BY video_entries.created_at DESC LIMIT 8
+        """
+    ):
+        activity.append({
+            "created_at": row["created_at"],
+            "badge_label": "Video",
+            "badge_class": "kind-badge",
+            "text": row["person_name"] + (f" — {row['topic']}" if row["topic"] else " — new recording"),
+            "url": url_for("show_entry", entry_id=row["id"]),
+        })
+
+    for row in db.execute(
+        "SELECT id, kind, title, created_at FROM contributions ORDER BY created_at DESC LIMIT 8"
+    ):
+        activity.append({
+            "created_at": row["created_at"],
+            "badge_label": CONTRIBUTION_KIND_LABELS[row["kind"]],
+            "badge_class": f"kind-badge kind-{row['kind']}",
+            "text": row["title"],
+            "url": url_for("show_contribution", contribution_id=row["id"]),
+        })
+
+    for row in db.execute(
+        """
+        SELECT time_capsules.id, time_capsules.title, time_capsules.unlock_date,
+               time_capsules.created_at, people.name AS recipient_name
+        FROM time_capsules
+        JOIN people ON people.id = time_capsules.recipient_id
+        ORDER BY time_capsules.created_at DESC LIMIT 8
+        """
+    ):
+        unlocked = is_unlocked(row["unlock_date"])
+        activity.append({
+            "created_at": row["created_at"],
+            "badge_label": "Unlocked" if unlocked else "Sealed",
+            "badge_class": "kind-badge kind-unlocked" if unlocked else "kind-badge kind-sealed",
+            "text": row["title"] if unlocked else f"A letter for {row['recipient_name']}",
+            "url": url_for("show_capsule", capsule_id=row["id"]),
+        })
+
+    for row in db.execute("SELECT id, name, created_at FROM people ORDER BY created_at DESC LIMIT 8"):
+        activity.append({
+            "created_at": row["created_at"],
+            "badge_label": "New person",
+            "badge_class": "kind-badge",
+            "text": f"{row['name']} joined the family tree",
+            "url": url_for("show_person", person_id=row["id"]),
+        })
+
+    activity.sort(key=lambda a: a["created_at"], reverse=True)
+    activity = activity[:12]
+
+    recent_photos = db.execute(
+        """
+        SELECT id, title, photo_filename FROM contributions
+        WHERE kind = 'photo' AND photo_filename IS NOT NULL
+        ORDER BY created_at DESC LIMIT 6
+        """
+    ).fetchall()
+
+    family_roots, _, _ = build_family_forest()
+
+    return render_template(
+        "dashboard.html", stats=stats, activity=activity, recent_photos=recent_photos,
+        family_roots=family_roots,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Story & video entries
+# ---------------------------------------------------------------------------
+
+ENTRY_QUERY = """
+    SELECT video_entries.*, people.name AS person_name
+    FROM video_entries
+    JOIN people ON people.id = video_entries.person_id
+"""
+
+
+@app.route("/stories")
+def stories():
+    q = request.args.get("q", "").strip()
+    db = get_db()
+    if q:
+        like = f"%{q}%"
+        entries = db.execute(
+            ENTRY_QUERY
+            + """
+            WHERE people.name LIKE ?
+               OR video_entries.topic LIKE ?
+               OR video_entries.english_translation LIKE ?
+               OR video_entries.gujarati_transcript LIKE ?
+            ORDER BY video_entries.date_recorded DESC, video_entries.id DESC
+            """,
+            (like, like, like, like),
+        ).fetchall()
+    else:
+        entries = db.execute(
+            ENTRY_QUERY + " ORDER BY video_entries.date_recorded DESC, video_entries.id DESC"
+        ).fetchall()
+    return render_template("stories.html", entries=entries, q=q)
+
+
+@app.route("/entries/new")
+def new_entry():
+    db = get_db()
+    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    preselect_person_id = request.args.get("person_id", type=int)
+    return render_template("form.html", entry=None, people=people, preselect_person_id=preselect_person_id)
+
+
+@app.route("/entries", methods=["POST"])
+def create_entry():
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO video_entries
+            (person_id, date_recorded, topic, gujarati_transcript, english_translation, video_link)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            request.form["person_id"],
+            request.form["date_recorded"].strip(),
+            request.form.get("topic", "").strip(),
+            request.form.get("gujarati_transcript", "").strip(),
+            request.form.get("english_translation", "").strip(),
+            request.form.get("video_link", "").strip(),
+        ),
+    )
+    db.commit()
+    return redirect(url_for("stories"))
+
+
+@app.route("/entries/<int:entry_id>")
+def show_entry(entry_id):
+    db = get_db()
+    entry = db.execute(ENTRY_QUERY + " WHERE video_entries.id = ?", (entry_id,)).fetchone()
+    if entry is None:
+        return "Entry not found", 404
+    return render_template("entry.html", entry=entry)
+
+
+@app.route("/entries/<int:entry_id>/edit")
+def edit_entry(entry_id):
+    db = get_db()
+    entry = db.execute(ENTRY_QUERY + " WHERE video_entries.id = ?", (entry_id,)).fetchone()
+    if entry is None:
+        return "Entry not found", 404
+    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    return render_template("form.html", entry=entry, people=people, preselect_person_id=None)
+
+
+@app.route("/entries/<int:entry_id>/update", methods=["POST"])
+def update_entry(entry_id):
+    db = get_db()
+    db.execute(
+        """
+        UPDATE video_entries
+        SET person_id = ?, date_recorded = ?, topic = ?,
+            gujarati_transcript = ?, english_translation = ?, video_link = ?
+        WHERE id = ?
+        """,
+        (
+            request.form["person_id"],
+            request.form["date_recorded"].strip(),
+            request.form.get("topic", "").strip(),
+            request.form.get("gujarati_transcript", "").strip(),
+            request.form.get("english_translation", "").strip(),
+            request.form.get("video_link", "").strip(),
+            entry_id,
+        ),
+    )
+    db.commit()
+    return redirect(url_for("show_entry", entry_id=entry_id))
+
+
+@app.route("/entries/<int:entry_id>/delete", methods=["POST"])
+def delete_entry(entry_id):
+    db = get_db()
+    db.execute("DELETE FROM video_entries WHERE id = ?", (entry_id,))
+    db.commit()
+    return redirect(url_for("stories"))
+
+
+# ---------------------------------------------------------------------------
+# Family tree: people + relationships
+# ---------------------------------------------------------------------------
+
+def add_relationship(person_id, relation, existing_id, new_name):
+    """Link person_id to another person as parent/child/spouse.
+    The other person is either picked from existing_id, or created fresh
+    from new_name if no existing person was chosen."""
+    db = get_db()
+    target_id = None
+    if existing_id:
+        target_id = int(existing_id)
+    elif new_name and new_name.strip():
+        cur = db.execute("INSERT INTO people (name) VALUES (?)", (new_name.strip(),))
+        target_id = cur.lastrowid
+
+    if target_id is None or target_id == person_id:
+        return
+
+    if relation == "parent":
+        db.execute(
+            "INSERT OR IGNORE INTO parent_child (parent_id, child_id) VALUES (?, ?)",
+            (target_id, person_id),
+        )
+    elif relation == "child":
+        db.execute(
+            "INSERT OR IGNORE INTO parent_child (parent_id, child_id) VALUES (?, ?)",
+            (person_id, target_id),
+        )
+    elif relation == "spouse":
+        a, b = sorted((person_id, target_id))
+        db.execute(
+            "INSERT OR IGNORE INTO spouses (person_a_id, person_b_id) VALUES (?, ?)", (a, b)
+        )
+    db.commit()
+
+
+@app.route("/people/new")
+def new_person():
+    return render_template(
+        "person_form.html",
+        person=None,
+        as_child_of=request.args.get("as_child_of", type=int),
+        as_parent_of=request.args.get("as_parent_of", type=int),
+        as_spouse_of=request.args.get("as_spouse_of", type=int),
+    )
+
+
+@app.route("/people", methods=["POST"])
+def create_person():
+    db = get_db()
+    cur = db.execute(
+        """
+        INSERT INTO people (name, surname, birth_date, birth_place, three_words, notes, family_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            request.form["name"].strip(),
+            request.form.get("surname", "").strip() or None,
+            request.form.get("birth_date", "").strip() or None,
+            request.form.get("birth_place", "").strip() or None,
+            request.form.get("three_words", "").strip() or None,
+            request.form.get("notes", "").strip() or None,
+            request.form.get("family_name", "").strip() or None,
+        ),
+    )
+    new_id = cur.lastrowid
+    db.commit()
+
+    as_child_of = request.form.get("as_child_of", type=int)
+    as_parent_of = request.form.get("as_parent_of", type=int)
+    as_spouse_of = request.form.get("as_spouse_of", type=int)
+
+    if as_child_of:
+        add_relationship(as_child_of, "child", new_id, None)
+        return redirect(url_for("show_person", person_id=as_child_of))
+    if as_parent_of:
+        add_relationship(as_parent_of, "parent", new_id, None)
+        return redirect(url_for("show_person", person_id=as_parent_of))
+    if as_spouse_of:
+        add_relationship(as_spouse_of, "spouse", new_id, None)
+        return redirect(url_for("show_person", person_id=as_spouse_of))
+
+    return redirect(url_for("show_person", person_id=new_id))
+
+
+@app.route("/people/<int:person_id>")
+def show_person(person_id):
+    db = get_db()
+    person = db.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
+    if person is None:
+        return "Person not found", 404
+
+    parents = db.execute(
+        """
+        SELECT people.* FROM parent_child
+        JOIN people ON people.id = parent_child.parent_id
+        WHERE parent_child.child_id = ?
+        ORDER BY people.name
+        """,
+        (person_id,),
+    ).fetchall()
+    children = db.execute(
+        """
+        SELECT people.* FROM parent_child
+        JOIN people ON people.id = parent_child.child_id
+        WHERE parent_child.parent_id = ?
+        ORDER BY people.birth_date IS NULL, people.birth_date, people.name
+        """,
+        (person_id,),
+    ).fetchall()
+    spouses = db.execute(
+        """
+        SELECT people.* FROM spouses
+        JOIN people ON people.id = (
+            CASE WHEN spouses.person_a_id = :pid THEN spouses.person_b_id
+                 ELSE spouses.person_a_id END
+        )
+        WHERE spouses.person_a_id = :pid OR spouses.person_b_id = :pid
+        ORDER BY people.name
+        """,
+        {"pid": person_id},
+    ).fetchall()
+    entries = db.execute(
+        "SELECT * FROM video_entries WHERE person_id = ? ORDER BY date_recorded DESC",
+        (person_id,),
+    ).fetchall()
+    all_people = db.execute(
+        "SELECT * FROM people WHERE id != ? ORDER BY name", (person_id,)
+    ).fetchall()
+    contributions = db.execute(
+        """
+        SELECT DISTINCT contributions.*, people.name AS author_name
+        FROM contributions
+        LEFT JOIN people ON people.id = contributions.author_id
+        LEFT JOIN contribution_people ON contribution_people.contribution_id = contributions.id
+        WHERE contributions.author_id = ? OR contribution_people.person_id = ?
+        ORDER BY contributions.created_at DESC
+        """,
+        (person_id, person_id),
+    ).fetchall()
+    capsule_rows = db.execute(
+        CAPSULE_QUERY + " WHERE time_capsules.recipient_id = ? ORDER BY time_capsules.unlock_date",
+        (person_id,),
+    ).fetchall()
+
+    return render_template(
+        "person.html",
+        person=person,
+        parents=parents,
+        children=children,
+        spouses=spouses,
+        entries=entries,
+        all_people=all_people,
+        contributions=contributions,
+        kind_labels=CONTRIBUTION_KIND_LABELS,
+        capsules=capsule_rows,
+        is_unlocked=is_unlocked,
+        describe_time_until=describe_time_until,
+    )
+
+
+@app.route("/people/<int:person_id>/edit")
+def edit_person(person_id):
+    db = get_db()
+    person = db.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
+    if person is None:
+        return "Person not found", 404
+    return render_template("person_form.html", person=person, as_child_of=None, as_parent_of=None, as_spouse_of=None)
+
+
+@app.route("/people/<int:person_id>/update", methods=["POST"])
+def update_person(person_id):
+    db = get_db()
+    db.execute(
+        """
+        UPDATE people
+        SET name = ?, surname = ?, birth_date = ?, birth_place = ?,
+            three_words = ?, notes = ?, family_name = ?
+        WHERE id = ?
+        """,
+        (
+            request.form["name"].strip(),
+            request.form.get("surname", "").strip() or None,
+            request.form.get("birth_date", "").strip() or None,
+            request.form.get("birth_place", "").strip() or None,
+            request.form.get("three_words", "").strip() or None,
+            request.form.get("notes", "").strip() or None,
+            request.form.get("family_name", "").strip() or None,
+            person_id,
+        ),
+    )
+    db.commit()
+    return redirect(url_for("show_person", person_id=person_id))
+
+
+@app.route("/people/<int:person_id>/delete", methods=["POST"])
+def delete_person(person_id):
+    db = get_db()
+    has_entries = db.execute(
+        "SELECT COUNT(*) AS c FROM video_entries WHERE person_id = ?", (person_id,)
+    ).fetchone()["c"]
+    if has_entries:
+        flash("Can't delete this person — they still have story entries linked to them. Delete or reassign those first.")
+        return redirect(url_for("show_person", person_id=person_id))
+    db.execute("DELETE FROM people WHERE id = ?", (person_id,))
+    db.commit()
+    return redirect(url_for("tree"))
+
+
+@app.route("/people/<int:person_id>/parents", methods=["POST"])
+def add_parent(person_id):
+    add_relationship(person_id, "parent", request.form.get("existing_id"), request.form.get("new_name"))
+    return redirect(url_for("show_person", person_id=person_id))
+
+
+@app.route("/people/<int:person_id>/children", methods=["POST"])
+def add_child(person_id):
+    add_relationship(person_id, "child", request.form.get("existing_id"), request.form.get("new_name"))
+    return redirect(url_for("show_person", person_id=person_id))
+
+
+@app.route("/people/<int:person_id>/spouses", methods=["POST"])
+def add_spouse(person_id):
+    add_relationship(person_id, "spouse", request.form.get("existing_id"), request.form.get("new_name"))
+    return redirect(url_for("show_person", person_id=person_id))
+
+
+@app.route("/relationships/parent_child/remove", methods=["POST"])
+def remove_parent_child():
+    db = get_db()
+    db.execute(
+        "DELETE FROM parent_child WHERE parent_id = ? AND child_id = ?",
+        (request.form["parent_id"], request.form["child_id"]),
+    )
+    db.commit()
+    return redirect(url_for("show_person", person_id=request.form["return_to"]))
+
+
+@app.route("/relationships/spouse/remove", methods=["POST"])
+def remove_spouse():
+    db = get_db()
+    a, b = sorted((int(request.form["person_a_id"]), int(request.form["person_b_id"])))
+    db.execute(
+        "DELETE FROM spouses WHERE person_a_id = ? AND person_b_id = ?", (a, b)
+    )
+    db.commit()
+    return redirect(url_for("show_person", person_id=request.form["return_to"]))
+
+
+def build_family_forest():
+    """Find every distinct family branch (one per side — e.g. Mum's side vs
+    Dad's side), and build each branch's full nested tree, rooted at its
+    eldest known ancestor(s). People who married into a branch (no recorded
+    parents of their own) are shown as a spouse rather than a separate root.
+
+    Returns (roots_meta, trees_by_root_id, unattached_people):
+    - roots_meta: [{"id":.., "label":..}, ...] for a branch-picker UI.
+    - trees_by_root_id: {root_id: nested tree node}.
+    - unattached_people: people not reachable from any branch (shouldn't
+      normally happen, but shown so nothing silently disappears).
+    """
+    db = get_db()
+    people = {row["id"]: dict(row) for row in db.execute("SELECT * FROM people").fetchall()}
+
+    parents_of = defaultdict(list)
+    children_of = defaultdict(list)
+    for row in db.execute("SELECT parent_id, child_id FROM parent_child"):
+        parents_of[row["child_id"]].append(row["parent_id"])
+        children_of[row["parent_id"]].append(row["child_id"])
+
+    spouses_of = defaultdict(list)
+    for row in db.execute("SELECT person_a_id, person_b_id FROM spouses"):
+        spouses_of[row["person_a_id"]].append(row["person_b_id"])
+        spouses_of[row["person_b_id"]].append(row["person_a_id"])
+
+    def sort_key(pid):
+        bd = people[pid].get("birth_date")
+        return (bd is None, bd or "", people[pid]["name"])
+
+    no_parents = [pid for pid in people if pid not in parents_of]
+
+    def married_in(pid):
+        return any(sp in parents_of for sp in spouses_of.get(pid, []))
+
+    true_roots = [pid for pid in no_parents if not married_in(pid)]
+    true_roots_set = set(true_roots)
+
+    top_level = []
+    skip = set()
+    for pid in sorted(true_roots, key=sort_key):
+        if pid in skip:
+            continue
+        top_level.append(pid)
+        for sp in spouses_of.get(pid, []):
+            if sp in true_roots_set:
+                skip.add(sp)
+
+    all_rendered = set()
+    trees_by_root = {}
+    roots_meta = []
+
+    for root_pid in top_level:
+        rendered = set()
+
+        def build_node(pid, ancestry):
+            rendered.add(pid)
+            spouse_ids = spouses_of.get(pid, [])
+            rendered.update(spouse_ids)
+            spouses = [people[sp] for sp in sorted(spouse_ids, key=sort_key)]
+
+            # Children may be recorded under either partner, so gather from both.
+            child_id_set = set()
+            for parent_id in [pid] + spouse_ids:
+                child_id_set.update(children_of.get(parent_id, []))
+            child_ids = sorted(child_id_set, key=sort_key)
+
+            next_ancestry = ancestry | {pid} | set(spouse_ids)
+            children_nodes = []
+            for cid in child_ids:
+                if cid in ancestry:
+                    continue
+                if cid in rendered:
+                    # Rare (e.g. cousins marrying within the same branch) —
+                    # already shown once above, don't duplicate the subtree.
+                    children_nodes.append(
+                        {"person": people[cid], "spouses": [], "children": [], "cross_ref": True}
+                    )
+                    continue
+                children_nodes.append(build_node(cid, next_ancestry))
+            return {"person": people[pid], "spouses": spouses, "children": children_nodes, "cross_ref": False}
+
+        trees_by_root[root_pid] = build_node(root_pid, set())
+        all_rendered.update(rendered)
+
+        names = [people[root_pid]["name"]] + [
+            people[sp]["name"] for sp in sorted(spouses_of.get(root_pid, []), key=sort_key)
+        ]
+        auto_label = " & ".join(names)
+
+        custom_name = people[root_pid].get("family_name")
+        if not custom_name:
+            for sp in spouses_of.get(root_pid, []):
+                if people[sp].get("family_name"):
+                    custom_name = people[sp]["family_name"]
+                    break
+
+        roots_meta.append({"id": root_pid, "label": custom_name or auto_label})
+
+    unattached = sorted(
+        (p for pid, p in people.items() if pid not in all_rendered),
+        key=lambda p: p["name"],
+    )
+    return roots_meta, trees_by_root, unattached
+
+
+@app.route("/tree")
+def tree():
+    roots_meta, trees_by_root, unattached = build_family_forest()
+    selected_root = request.args.get("root", type=int)
+    if selected_root not in trees_by_root:
+        selected_root = roots_meta[0]["id"] if roots_meta else None
+    return render_template(
+        "tree.html",
+        roots=roots_meta,
+        selected_root=selected_root,
+        tree=trees_by_root.get(selected_root),
+        unattached=unattached,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Contribution feed
+# ---------------------------------------------------------------------------
+
+CONTRIBUTION_QUERY = """
+    SELECT contributions.*, people.name AS author_name
+    FROM contributions
+    LEFT JOIN people ON people.id = contributions.author_id
+"""
+
+
+def save_photo_upload(file_storage):
+    if not file_storage or not file_storage.filename:
+        return None
+    ext = file_storage.filename.rsplit(".", 1)[-1].lower() if "." in file_storage.filename else ""
+    if ext not in ALLOWED_PHOTO_EXTENSIONS:
+        flash(f"Photo not saved — \"{file_storage.filename}\" isn't a supported image type.")
+        return None
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file_storage.filename)}"
+    file_storage.save(UPLOAD_DIR / filename)
+    return filename
+
+
+def get_linked_people(contribution_id):
+    db = get_db()
+    return db.execute(
+        """
+        SELECT people.* FROM contribution_people
+        JOIN people ON people.id = contribution_people.person_id
+        WHERE contribution_people.contribution_id = ?
+        ORDER BY people.name
+        """,
+        (contribution_id,),
+    ).fetchall()
+
+
+def set_linked_people(contribution_id, person_ids):
+    db = get_db()
+    db.execute("DELETE FROM contribution_people WHERE contribution_id = ?", (contribution_id,))
+    for pid in person_ids:
+        db.execute(
+            "INSERT OR IGNORE INTO contribution_people (contribution_id, person_id) VALUES (?, ?)",
+            (contribution_id, pid),
+        )
+    db.commit()
+
+
+@app.route("/feed")
+def feed():
+    db = get_db()
+    kind = request.args.get("kind", "").strip()
+    query = CONTRIBUTION_QUERY
+    params = ()
+    if kind:
+        query += " WHERE contributions.kind = ?"
+        params = (kind,)
+    query += " ORDER BY contributions.created_at DESC, contributions.id DESC"
+    contributions = db.execute(query, params).fetchall()
+    return render_template(
+        "feed.html", contributions=contributions, kinds=CONTRIBUTION_KINDS,
+        kind_labels=CONTRIBUTION_KIND_LABELS, active_kind=kind,
+    )
+
+
+@app.route("/feed/new")
+def new_contribution():
+    db = get_db()
+    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    person_id = request.args.get("person_id", type=int)
+    linked_ids = {person_id} if person_id else set()
+    return render_template(
+        "contribution_form.html", contribution=None, people=people,
+        kinds=CONTRIBUTION_KINDS, linked_ids=linked_ids,
+    )
+
+
+@app.route("/feed", methods=["POST"])
+def create_contribution():
+    db = get_db()
+    photo_filename = save_photo_upload(request.files.get("photo"))
+    cur = db.execute(
+        """
+        INSERT INTO contributions (kind, title, body, photo_filename, author_id)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            request.form["kind"],
+            request.form["title"].strip(),
+            request.form.get("body", "").strip(),
+            photo_filename,
+            request.form.get("author_id") or None,
+        ),
+    )
+    contribution_id = cur.lastrowid
+    db.commit()
+    person_ids = [int(pid) for pid in request.form.getlist("person_ids")]
+    set_linked_people(contribution_id, person_ids)
+    return redirect(url_for("show_contribution", contribution_id=contribution_id))
+
+
+@app.route("/feed/<int:contribution_id>")
+def show_contribution(contribution_id):
+    db = get_db()
+    contribution = db.execute(
+        CONTRIBUTION_QUERY + " WHERE contributions.id = ?", (contribution_id,)
+    ).fetchone()
+    if contribution is None:
+        return "Entry not found", 404
+    linked_people = get_linked_people(contribution_id)
+    return render_template(
+        "contribution.html", contribution=contribution, linked_people=linked_people,
+        kind_labels=CONTRIBUTION_KIND_LABELS,
+    )
+
+
+@app.route("/feed/<int:contribution_id>/edit")
+def edit_contribution(contribution_id):
+    db = get_db()
+    contribution = db.execute(
+        CONTRIBUTION_QUERY + " WHERE contributions.id = ?", (contribution_id,)
+    ).fetchone()
+    if contribution is None:
+        return "Entry not found", 404
+    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    linked_ids = {p["id"] for p in get_linked_people(contribution_id)}
+    return render_template(
+        "contribution_form.html", contribution=contribution, people=people,
+        kinds=CONTRIBUTION_KINDS, linked_ids=linked_ids,
+    )
+
+
+@app.route("/feed/<int:contribution_id>/update", methods=["POST"])
+def update_contribution(contribution_id):
+    db = get_db()
+    photo_filename = save_photo_upload(request.files.get("photo"))
+    if photo_filename:
+        db.execute(
+            """
+            UPDATE contributions
+            SET kind = ?, title = ?, body = ?, photo_filename = ?, author_id = ?
+            WHERE id = ?
+            """,
+            (
+                request.form["kind"],
+                request.form["title"].strip(),
+                request.form.get("body", "").strip(),
+                photo_filename,
+                request.form.get("author_id") or None,
+                contribution_id,
+            ),
+        )
+    else:
+        db.execute(
+            """
+            UPDATE contributions
+            SET kind = ?, title = ?, body = ?, author_id = ?
+            WHERE id = ?
+            """,
+            (
+                request.form["kind"],
+                request.form["title"].strip(),
+                request.form.get("body", "").strip(),
+                request.form.get("author_id") or None,
+                contribution_id,
+            ),
+        )
+    db.commit()
+    person_ids = [int(pid) for pid in request.form.getlist("person_ids")]
+    set_linked_people(contribution_id, person_ids)
+    return redirect(url_for("show_contribution", contribution_id=contribution_id))
+
+
+@app.route("/feed/<int:contribution_id>/delete", methods=["POST"])
+def delete_contribution(contribution_id):
+    db = get_db()
+    db.execute("DELETE FROM contributions WHERE id = ?", (contribution_id,))
+    db.commit()
+    return redirect(url_for("feed"))
+
+
+# ---------------------------------------------------------------------------
+# Time capsule letters
+# ---------------------------------------------------------------------------
+
+CAPSULE_QUERY = """
+    SELECT time_capsules.*,
+           recipient.name AS recipient_name,
+           author.name AS author_name
+    FROM time_capsules
+    JOIN people AS recipient ON recipient.id = time_capsules.recipient_id
+    LEFT JOIN people AS author ON author.id = time_capsules.author_id
+"""
+
+
+def is_unlocked(unlock_date_str):
+    return date.today().isoformat() >= unlock_date_str
+
+
+def describe_time_until(unlock_date_str):
+    days = (date.fromisoformat(unlock_date_str) - date.today()).days
+    if days <= 0:
+        return "unlocks today"
+    if days >= 365:
+        years = days // 365
+        return f"unlocks in about {years} year{'s' if years != 1 else ''}"
+    if days >= 30:
+        months = days // 30
+        return f"unlocks in about {months} month{'s' if months != 1 else ''}"
+    return f"unlocks in {days} day{'s' if days != 1 else ''}"
+
+
+@app.route("/capsules")
+def capsules():
+    db = get_db()
+    rows = db.execute(CAPSULE_QUERY + " ORDER BY time_capsules.unlock_date").fetchall()
+    sealed = [r for r in rows if not is_unlocked(r["unlock_date"])]
+    unlocked = sorted(
+        (r for r in rows if is_unlocked(r["unlock_date"])),
+        key=lambda r: r["unlock_date"],
+        reverse=True,
+    )
+    return render_template(
+        "capsules.html", sealed=sealed, unlocked=unlocked, describe_time_until=describe_time_until
+    )
+
+
+@app.route("/capsules/new")
+def new_capsule():
+    db = get_db()
+    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    return render_template(
+        "capsule_form.html", capsule=None, people=people,
+        preselect_recipient_id=request.args.get("person_id", type=int),
+    )
+
+
+@app.route("/capsules", methods=["POST"])
+def create_capsule():
+    db = get_db()
+    cur = db.execute(
+        """
+        INSERT INTO time_capsules (recipient_id, author_id, title, body, unlock_date)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            request.form["recipient_id"],
+            request.form.get("author_id") or None,
+            request.form["title"].strip(),
+            request.form["body"].strip(),
+            request.form["unlock_date"].strip(),
+        ),
+    )
+    db.commit()
+    return redirect(url_for("show_capsule", capsule_id=cur.lastrowid))
+
+
+@app.route("/capsules/<int:capsule_id>")
+def show_capsule(capsule_id):
+    db = get_db()
+    capsule = db.execute(CAPSULE_QUERY + " WHERE time_capsules.id = ?", (capsule_id,)).fetchone()
+    if capsule is None:
+        return "Letter not found", 404
+    unlocked = is_unlocked(capsule["unlock_date"])
+    return render_template(
+        "capsule.html", capsule=capsule, unlocked=unlocked,
+        describe_time_until=describe_time_until,
+    )
+
+
+@app.route("/capsules/<int:capsule_id>/edit")
+def edit_capsule(capsule_id):
+    db = get_db()
+    capsule = db.execute(CAPSULE_QUERY + " WHERE time_capsules.id = ?", (capsule_id,)).fetchone()
+    if capsule is None:
+        return "Letter not found", 404
+    if not is_unlocked(capsule["unlock_date"]):
+        flash("This letter is sealed and can't be edited until it unlocks — delete and rewrite it if you need to change something.")
+        return redirect(url_for("show_capsule", capsule_id=capsule_id))
+    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    return render_template(
+        "capsule_form.html", capsule=capsule, people=people, preselect_recipient_id=None
+    )
+
+
+@app.route("/capsules/<int:capsule_id>/update", methods=["POST"])
+def update_capsule(capsule_id):
+    db = get_db()
+    existing = db.execute(
+        "SELECT unlock_date FROM time_capsules WHERE id = ?", (capsule_id,)
+    ).fetchone()
+    if existing is None:
+        return "Letter not found", 404
+    if not is_unlocked(existing["unlock_date"]):
+        flash("This letter is sealed and can't be edited until it unlocks.")
+        return redirect(url_for("show_capsule", capsule_id=capsule_id))
+    db.execute(
+        """
+        UPDATE time_capsules
+        SET recipient_id = ?, author_id = ?, title = ?, body = ?, unlock_date = ?
+        WHERE id = ?
+        """,
+        (
+            request.form["recipient_id"],
+            request.form.get("author_id") or None,
+            request.form["title"].strip(),
+            request.form["body"].strip(),
+            request.form["unlock_date"].strip(),
+            capsule_id,
+        ),
+    )
+    db.commit()
+    return redirect(url_for("show_capsule", capsule_id=capsule_id))
+
+
+@app.route("/capsules/<int:capsule_id>/delete", methods=["POST"])
+def delete_capsule(capsule_id):
+    db = get_db()
+    db.execute("DELETE FROM time_capsules WHERE id = ?", (capsule_id,))
+    db.commit()
+    return redirect(url_for("capsules"))
+
+
+# ---------------------------------------------------------------------------
+# Yearly almanac
+# ---------------------------------------------------------------------------
+
+def get_almanac_years():
+    """Every year that has at least one dated thing in the archive."""
+    db = get_db()
+    years = set()
+    for table, col in [
+        ("video_entries", "date_recorded"),
+        ("contributions", "created_at"),
+        ("time_capsules", "unlock_date"),
+        ("people", "created_at"),
+    ]:
+        rows = db.execute(f"SELECT DISTINCT substr({col}, 1, 4) AS y FROM {table}").fetchall()
+        years.update(int(r["y"]) for r in rows if r["y"])
+    return sorted(years, reverse=True)
+
+
+@app.route("/almanac")
+def almanac_redirect():
+    years = get_almanac_years()
+    target_year = years[0] if years else date.today().year
+    return redirect(url_for("almanac", year=target_year))
+
+
+@app.route("/almanac/<int:year>")
+def almanac(year):
+    db = get_db()
+    year_str = f"{year:04d}"
+
+    videos = db.execute(
+        ENTRY_QUERY + " WHERE substr(video_entries.date_recorded, 1, 4) = ?"
+        " ORDER BY video_entries.date_recorded",
+        (year_str,),
+    ).fetchall()
+
+    entries = db.execute(
+        CONTRIBUTION_QUERY + " WHERE substr(contributions.created_at, 1, 4) = ?"
+        " ORDER BY contributions.created_at",
+        (year_str,),
+    ).fetchall()
+
+    capsule_rows = db.execute(
+        CAPSULE_QUERY + " WHERE substr(time_capsules.unlock_date, 1, 4) = ?"
+        " ORDER BY time_capsules.unlock_date",
+        (year_str,),
+    ).fetchall()
+    unlocked_capsules = [c for c in capsule_rows if is_unlocked(c["unlock_date"])]
+
+    new_people = db.execute(
+        "SELECT * FROM people WHERE substr(created_at, 1, 4) = ? ORDER BY created_at",
+        (year_str,),
+    ).fetchall()
+
+    years = get_almanac_years()
+    if year not in years:
+        years = sorted(years + [year], reverse=True)
+    idx = years.index(year)
+    newer_year = years[idx - 1] if idx > 0 else None
+    older_year = years[idx + 1] if idx + 1 < len(years) else None
+
+    return render_template(
+        "almanac.html",
+        year=year,
+        videos=videos,
+        contributions=entries,
+        capsules=unlocked_capsules,
+        new_people=new_people,
+        years=years,
+        newer_year=newer_year,
+        older_year=older_year,
+        kind_labels=CONTRIBUTION_KIND_LABELS,
+    )
+
+
+if __name__ == "__main__":
+    if not DATABASE.exists():
+        init_db()
+    app.run(debug=True)

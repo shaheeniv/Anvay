@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Time Capsules — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>Time Capsules</h1>
+    <a class="button" href="{{ url_for('new_capsule') }}">+ Write a letter</a>
+  </div>
+
+  <p class="hint capsule-intro">
+    Write a letter now, addressed to someone, sealed until a future date.
+    The seal is an honor system — this app has no login, so please don't
+    open a letter early!
+  </p>
+
+  <section class="relation-section">
+    <h2>Sealed</h2>
+    {% if sealed %}
+      <ul class="entry-list">
+        {% for c in sealed %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_capsule', capsule_id=c['id']) }}">
+              <span class="kind-badge kind-sealed">Sealed</span>
+              <span class="entry-person">To {{ c['recipient_name'] }}</span>
+              <span class="entry-date">{{ describe_time_until(c['unlock_date']) }} · {{ c['unlock_date'] }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No sealed letters right now.</p>
+    {% endif %}
+  </section>
+
+  <section class="relation-section">
+    <h2>Unlocked</h2>
+    {% if unlocked %}
+      <ul class="entry-list">
+        {% for c in unlocked %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_capsule', capsule_id=c['id']) }}">
+              <span class="kind-badge kind-unlocked">Unlocked</span>
+              <span class="entry-person">{{ c['title'] }}</span>
+              <span class="entry-date">To {{ c['recipient_name'] }} · unlocked {{ c['unlock_date'] }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No letters have unlocked yet.</p>
+    {% endif %}
+  </section>
+
+{% endblock %}

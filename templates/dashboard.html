@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header hero-header">
+    <img src="{{ url_for('static', filename='logo-full.png') }}" alt="Anvay — Stories, Roots, Legacy" class="hero-logo">
+  </div>
+
+  {% if family_roots %}
+    <section class="family-box">
+      <h2>{{ "Your Family" if family_roots|length == 1 else "Your Families" }}</h2>
+      <div class="family-box-links">
+        {% for root in family_roots %}
+          <a class="family-box-link" href="{{ url_for('tree', root=root.id) }}">
+            <span class="family-box-name">{{ root.label }}</span>
+            <span class="family-box-cta">View family tree &rarr;</span>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="stat-grid">
+    <a class="stat-card" href="{{ url_for('tree') }}">
+      <span class="stat-number">{{ stats.people }}</span>
+      <span class="stat-label">People in the family tree</span>
+    </a>
+    <a class="stat-card" href="{{ url_for('stories') }}">
+      <span class="stat-number">{{ stats.videos }}</span>
+      <span class="stat-label">Stories &amp; videos recorded</span>
+    </a>
+    <a class="stat-card" href="{{ url_for('feed') }}">
+      <span class="stat-number">{{ stats.contributions }}</span>
+      <span class="stat-label">Contributions</span>
+    </a>
+    <a class="stat-card" href="{{ url_for('capsules') }}">
+      <span class="stat-number">{{ stats.capsules_sealed + stats.capsules_unlocked }}</span>
+      <span class="stat-label">
+        Time capsule letters
+        {% if stats.capsules_sealed %}<br>{{ stats.capsules_sealed }} still sealed{% endif %}
+      </span>
+    </a>
+  </div>
+
+  <div class="quick-actions">
+    <a class="small-button" href="{{ url_for('new_entry') }}">+ Log a video entry</a>
+    <a class="small-button" href="{{ url_for('new_contribution') }}">+ Add a contribution</a>
+    <a class="small-button" href="{{ url_for('new_person') }}">+ Add a person</a>
+    <a class="small-button" href="{{ url_for('new_capsule') }}">+ Write a letter</a>
+  </div>
+
+  {% if recent_photos %}
+    <section class="relation-section">
+      <h2>Recent photos</h2>
+      <ul class="photo-gallery photo-gallery-compact">
+        {% for p in recent_photos %}
+          <li class="photo-gallery-item">
+            <a href="{{ url_for('show_contribution', contribution_id=p['id']) }}">
+              <img src="{{ url_for('static', filename='uploads/' ~ p['photo_filename']) }}" alt="{{ p['title'] }}">
+              <span class="photo-gallery-caption">{{ p['title'] }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section class="relation-section">
+    <h2>Recent activity</h2>
+    {% if activity %}
+      <ul class="activity-list">
+        {% for item in activity %}
+          <li class="activity-item">
+            <a href="{{ item.url }}">
+              <span class="{{ item.badge_class }}">{{ item.badge_label }}</span>
+              <span class="activity-text">{{ item.text }}</span>
+              <span class="activity-date">{{ item.created_at[:10] }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">Nothing added yet — start by adding a person, a story, or a memory.</p>
+    {% endif %}
+  </section>
+
+{% endblock %}

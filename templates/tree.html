@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Family Tree — Anvay{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>Family Tree</h1>
+    <a class="button" href="{{ url_for('new_person') }}">+ Add a person</a>
+  </div>
+
+  {% if roots|length > 1 %}
+    <div class="kind-filter">
+      {% for root in roots %}
+        <a href="{{ url_for('tree', root=root.id) }}" class="{{ 'active' if root.id == selected_root else '' }}">{{ root.label }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if tree %}
+    <div class="tree-scroll">
+      <div class="branch-tree-canvas">
+        <ul class="branch-tree">
+          {%- for node in [tree] recursive %}
+            <li>
+              <div class="branch-node{{ ' branch-cross-ref' if node.cross_ref else '' }}">
+                <a class="branch-name" href="{{ url_for('show_person', person_id=node.person.id) }}">{{ node.person.name }}</a>
+                {% for spouse in node.spouses %}
+                  <span class="branch-spouse"><span class="branch-heart">&#9825;</span> <a href="{{ url_for('show_person', person_id=spouse.id) }}">{{ spouse.name }}</a></span>
+                {% endfor %}
+                {% if node.cross_ref %}<span class="branch-note">see their family above</span>{% endif %}
+              </div>
+              {% if node.children %}
+                <ul>{{ loop(node.children) }}</ul>
+              {% endif %}
+            </li>
+          {%- endfor %}
+        </ul>
+      </div>
+    </div>
+  {% else %}
+    <p class="empty-state">No one's in the family tree yet. Start by adding a person.</p>
+  {% endif %}
+
+  <script>
+  (function () {
+    function layoutConnectors() {
+      var canvas = document.querySelector(".branch-tree-canvas");
+      if (!canvas) return;
+
+      canvas.querySelectorAll(".connector, .connector-joint").forEach(function (el) { el.remove(); });
+      var canvasRect = canvas.getBoundingClientRect();
+      var GAP = 40;
+
+      function relRect(el) {
+        var r = el.getBoundingClientRect();
+        return {
+          left: r.left - canvasRect.left,
+          top: r.top - canvasRect.top,
+          bottom: r.bottom - canvasRect.top,
+          centerX: r.left - canvasRect.left + r.width / 2,
+        };
+      }
+
+      function addSegment(x1, y1, x2, y2) {
+        var div = document.createElement("div");
+        div.className = "connector";
+        if (Math.abs(y1 - y2) < 0.5) {
+          div.style.left = Math.min(x1, x2) + "px";
+          div.style.top = y1 + "px";
+          div.style.width = Math.abs(x2 - x1) + "px";
+          div.style.height = "2px";
+        } else {
+          div.style.left = Math.min(x1, x2) + "px";
+          div.style.top = Math.min(y1, y2) + "px";
+          div.style.width = "2px";
+          div.style.height = Math.abs(y2 - y1) + "px";
+        }
+        canvas.appendChild(div);
+      }
+
+      function addJoint(x, y) {
+        var dot = document.createElement("div");
+        dot.className = "connector-joint";
+        dot.style.left = x + "px";
+        dot.style.top = y + "px";
+        canvas.appendChild(dot);
+      }
+
+      canvas.querySelectorAll("li").forEach(function (li) {
+        var box = li.querySelector(":scope > .branch-node");
+        var childUl = li.querySelector(":scope > ul");
+        if (!box || !childUl) return;
+
+        var childLis = Array.prototype.filter.call(childUl.children, function (c) {
+          return c.tagName === "LI";
+        });
+        if (!childLis.length) return;
+
+        var boxRect = relRect(box);
+        var childRects = childLis.map(function (cli) {
+          return relRect(cli.querySelector(":scope > .branch-node"));
+        });
+
+        var midY = boxRect.bottom + GAP / 2;
+
+        addSegment(boxRect.centerX, boxRect.bottom, boxRect.centerX, midY);
+        addJoint(boxRect.centerX, midY);
+
+        var firstX = childRects[0].centerX;
+        var lastX = childRects[childRects.length - 1].centerX;
+        if (childRects.length > 1) {
+          addSegment(firstX, midY, lastX, midY);
+        } else if (Math.abs(firstX - boxRect.centerX) > 0.5) {
+          addSegment(boxRect.centerX, midY, firstX, midY);
+        }
+
+        childRects.forEach(function (cr) {
+          addSegment(cr.centerX, midY, cr.centerX, cr.top);
+          addJoint(cr.centerX, midY);
+        });
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", layoutConnectors);
+    } else {
+      layoutConnectors();
+    }
+    window.addEventListener("resize", layoutConnectors);
+  })();
+  </script>
+
+  {% if unattached %}
+    <section class="relation-section">
+      <h2>Not yet connected</h2>
+      <p class="hint">These people have been added but aren't linked to anyone yet.</p>
+      <ul class="relation-list">
+        {% for person in unattached %}
+          <li><a href="{{ url_for('show_person', person_id=person['id']) }}">{{ person['name'] }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+{% endblock %}

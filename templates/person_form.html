@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{% if person %}Edit Person{% else %}Add a Person{% endif %} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>{% if person %}Edit {{ person['name'] }}{% else %}Add a Person{% endif %}</h1>
+  </div>
+
+  <form
+    class="entry-form"
+    method="post"
+    action="{% if person %}{{ url_for('update_person', person_id=person['id']) }}{% else %}{{ url_for('create_person') }}{% endif %}"
+  >
+    {% if as_child_of %}<input type="hidden" name="as_child_of" value="{{ as_child_of }}">{% endif %}
+    {% if as_parent_of %}<input type="hidden" name="as_parent_of" value="{{ as_parent_of }}">{% endif %}
+    {% if as_spouse_of %}<input type="hidden" name="as_spouse_of" value="{{ as_spouse_of }}">{% endif %}
+
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" required
+      placeholder="However they're known in the family — e.g. Dada, Ba, Mum, Raj…"
+      value="{{ person['name'] if person else '' }}">
+
+    <label for="surname">Surname <span class="hint">(optional)</span></label>
+    <input type="text" id="surname" name="surname"
+      placeholder="e.g. Vekaria"
+      value="{{ (person['surname'] or '') if person else '' }}">
+
+    <label for="birth_date">Birth date <span class="hint">(optional)</span></label>
+    <input type="date" id="birth_date" name="birth_date"
+      value="{{ (person['birth_date'] or '') if person else '' }}">
+
+    <label for="birth_place">Born in <span class="hint">(optional)</span></label>
+    <input type="text" id="birth_place" name="birth_place"
+      placeholder="e.g. Nairobi, Kenya"
+      value="{{ (person['birth_place'] or '') if person else '' }}">
+
+    <label for="three_words">Three words that describe them <span class="hint">(optional — separate with commas)</span></label>
+    <input type="text" id="three_words" name="three_words"
+      placeholder="e.g. Kind, Funny, Determined"
+      value="{{ (person['three_words'] or '') if person else '' }}">
+
+    <label for="notes">Notes <span class="hint">(optional)</span></label>
+    <textarea id="notes" name="notes" rows="4"
+      placeholder="Anything worth remembering about them…">{{ (person['notes'] or '') if person else '' }}</textarea>
+
+    <label for="family_name">Family tree name <span class="hint">(optional — only used if this person has no parents recorded, i.e. they're the eldest known ancestor of a branch; names that branch's tab on the Family Tree page)</span></label>
+    <input type="text" id="family_name" name="family_name"
+      placeholder="e.g. Vekaria Family"
+      value="{{ (person['family_name'] or '') if person else '' }}">
+
+    <div class="form-actions">
+      <button type="submit" class="button">{% if person %}Save changes{% else %}Save person{% endif %}</button>
+      <a class="cancel-link" href="{% if person %}{{ url_for('show_person', person_id=person['id']) }}{% else %}{{ url_for('tree') }}{% endif %}">Cancel</a>
+    </div>
+  </form>
+
+{% endblock %}

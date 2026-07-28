@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{% if entry %}Edit Entry{% else %}Log a New Entry{% endif %} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>{% if entry %}Edit Entry{% else %}Log a New Entry{% endif %}</h1>
+  </div>
+
+  <form
+    class="entry-form"
+    method="post"
+    action="{% if entry %}{{ url_for('update_entry', entry_id=entry['id']) }}{% else %}{{ url_for('create_entry') }}{% endif %}"
+  >
+    <label for="person_id">Person</label>
+    {% if people %}
+      <select id="person_id" name="person_id" required>
+        <option value="" disabled {% if not entry and not preselect_person_id %}selected{% endif %}>— choose a person —</option>
+        {% for person in people %}
+          <option value="{{ person['id'] }}"
+            {% if entry and entry['person_id'] == person['id'] %}selected{% endif %}
+            {% if not entry and preselect_person_id == person['id'] %}selected{% endif %}>
+            {{ person['name'] }}
+          </option>
+        {% endfor %}
+      </select>
+    {% else %}
+      <p class="hint">No one's in the family tree yet — <a href="{{ url_for('new_person') }}">add a person</a> first.</p>
+    {% endif %}
+
+    <label for="date_recorded">Date recorded</label>
+    <input type="date" id="date_recorded" name="date_recorded" required
+      value="{{ entry['date_recorded'] if entry else '' }}">
+
+    <label for="topic">Topic / summary</label>
+    <input type="text" id="topic" name="topic"
+      placeholder="e.g. Growing up in Nairobi, the family recipe for theplas…"
+      value="{{ (entry['topic'] or '') if entry else '' }}">
+
+    <label for="video_link">Video link</label>
+    <input type="url" id="video_link" name="video_link"
+      placeholder="Link to the video (Google Drive, iCloud, etc.)"
+      value="{{ (entry['video_link'] or '') if entry else '' }}">
+
+    <label for="gujarati_transcript">Gujarati transcript <span class="hint">(original — kept as the source)</span></label>
+    <textarea id="gujarati_transcript" name="gujarati_transcript" rows="8"
+      placeholder="Type or paste the original Gujarati transcript here…">{{ (entry['gujarati_transcript'] or '') if entry else '' }}</textarea>
+
+    <label for="english_translation">English translation</label>
+    <textarea id="english_translation" name="english_translation" rows="8"
+      placeholder="English translation, alongside the original…">{{ (entry['english_translation'] or '') if entry else '' }}</textarea>
+
+    <div class="form-actions">
+      <button type="submit" class="button">{% if entry %}Save changes{% else %}Save entry{% endif %}</button>
+      <a class="cancel-link" href="{% if entry %}{{ url_for('show_entry', entry_id=entry['id']) }}{% else %}{{ url_for('stories') }}{% endif %}">Cancel</a>
+    </div>
+  </form>
+
+{% endblock %}

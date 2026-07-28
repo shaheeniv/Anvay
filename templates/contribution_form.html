@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{% if contribution %}Edit Contribution{% else %}Add a Contribution{% endif %} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>{% if contribution %}Edit Contribution{% else %}Add a Contribution{% endif %}</h1>
+  </div>
+
+  {% if people %}
+  <form
+    class="entry-form"
+    method="post"
+    enctype="multipart/form-data"
+    action="{% if contribution %}{{ url_for('update_contribution', contribution_id=contribution['id']) }}{% else %}{{ url_for('create_contribution') }}{% endif %}"
+  >
+    <label for="kind">Type</label>
+    <select id="kind" name="kind" required>
+      {% for value, label in kinds %}
+        <option value="{{ value }}" {% if contribution and contribution['kind'] == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" required
+      placeholder="A short title for this…"
+      value="{{ contribution['title'] if contribution else '' }}">
+
+    <label for="author_id">Added by</label>
+    <select id="author_id" name="author_id">
+      <option value="">— choose who's adding this —</option>
+      {% for person in people %}
+        <option value="{{ person['id'] }}"
+          {% if contribution and contribution['author_id'] == person['id'] %}selected{% endif %}>
+          {{ person['name'] }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <label for="body">Story &amp; context <span class="hint">(the "why" behind it, not just the "what")</span></label>
+    <textarea id="body" name="body" rows="8"
+      placeholder="The memory, story, or the why behind this tradition…">{{ (contribution['body'] or '') if contribution else '' }}</textarea>
+
+    <label for="photo">Photo <span class="hint">(optional)</span></label>
+    <input type="file" id="photo" name="photo" accept="image/png,image/jpeg,image/gif,image/webp">
+    {% if contribution and contribution['photo_filename'] %}
+      <p class="hint">Currently has a photo attached — choosing a new one will replace it.</p>
+    {% endif %}
+
+    <label>Linked family members <span class="hint">(optional — who is this about?)</span></label>
+    <div class="checkbox-list">
+      {% for person in people %}
+        <label class="checkbox-item">
+          <input type="checkbox" name="person_ids" value="{{ person['id'] }}"
+            {% if person['id'] in linked_ids %}checked{% endif %}>
+          {{ person['name'] }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="button">{% if contribution %}Save changes{% else %}Save contribution{% endif %}</button>
+      <a class="cancel-link" href="{% if contribution %}{{ url_for('show_contribution', contribution_id=contribution['id']) }}{% else %}{{ url_for('feed') }}{% endif %}">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+    <p class="hint">No one's in the family tree yet — <a href="{{ url_for('new_person') }}">add a person</a> first.</p>
+  {% endif %}
+
+{% endblock %}
