@@ -19,14 +19,22 @@
     <a class="site-title" href="{{ url_for('dashboard') }}">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="Anvay" class="site-logo">
     </a>
-    <nav>
-      <a href="{{ url_for('dashboard') }}">Home</a>
-      <a href="{{ url_for('stories') }}">Stories</a>
-      <a href="{{ url_for('tree') }}">Family Tree</a>
-      <a href="{{ url_for('feed') }}">Contributions</a>
-      <a href="{{ url_for('capsules') }}">Time Capsules</a>
-      <a href="{{ url_for('almanac_redirect') }}">Almanac</a>
-    </nav>
+    {% if current_person %}
+    <div class="header-right">
+      <nav>
+        <a href="{{ url_for('dashboard') }}">Home</a>
+        <a href="{{ url_for('stories') }}">Stories</a>
+        <a href="{{ url_for('tree') }}">Family Tree</a>
+        <a href="{{ url_for('feed') }}">Contributions</a>
+        <a href="{{ url_for('capsules') }}">Time Capsules</a>
+        <a href="{{ url_for('almanac_redirect') }}">Almanac</a>
+      </nav>
+      <form class="logout-form" method="post" action="{{ url_for('logout') }}">
+        <span class="current-person-name">{{ current_person['name'] }}</span>
+        <button type="submit" class="link-button">Log out</button>
+      </form>
+    </div>
+    {% endif %}
   </header>
 
   <main class="{% block main_class %}{% endblock %}">

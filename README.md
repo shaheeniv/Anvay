@@ -1,15 +1,20 @@
 # Anvay
 
-A private, local website for recording the family's stories, keeping a
-living family tree, collecting memories/photos/traditions from everyone,
-and writing time capsule letters — starting with video interviews with
+A private website for recording the family's stories, keeping a living
+family tree, collecting memories/photos/traditions from everyone, and
+writing time capsule letters — starting with video interviews with
 grandparents (Gujarati transcript + English translation side by side).
 
-Everything lives on this computer. Nothing is uploaded anywhere. The
-data is stored in a single file, `archive.db`, which you can back up
-just by copying it.
+You can run it purely on this computer (see below), or put the deployed
+version online so everyone in the family can log in from their own phone
+or laptop (see "Deploying so the family can access it remotely"). Either
+way, the data is stored in a single file, `archive.db`, which you can
+back up just by copying it.
 
-## How to run it
+Everyone now needs a username and password to get in — see "Logging in"
+below.
+
+## How to run it locally
 
 Open Terminal, then run these commands (only needed once per computer
 restart — you don't need to repeat the setup steps below every time):
@@ -27,6 +32,46 @@ http://127.0.0.1:5000
 ```
 
 To stop the site, go back to Terminal and press `Control + C`.
+
+## Logging in
+
+The site now requires a username and password — this became necessary
+once family members can reach it remotely, not just from one shared
+computer. There's no public sign-up: only an admin (currently just
+Shaheeni) can create a login for someone else.
+
+- **Shaheeni's own account** was created automatically when this feature
+  shipped, username `shaheeni`. If you don't already have the password,
+  ask whoever set this up, or reset it directly in the database (see
+  "Resetting a password by hand" below).
+- **To give someone else a login**: go to their profile page (Family
+  Tree → click their name) and click "Set up login" — pick a username
+  and a starting password for them. They can change their own password
+  later the same way an admin edits anyone's login, or an admin can do
+  it for them via "Edit login" on their profile.
+- **Forgot a password?** There's no self-service "forgot password" yet
+  (that needs email-sending, which isn't set up) — an admin resets it
+  from that person's profile page's "Edit login" button.
+
+### Resetting a password by hand
+
+If you're ever locked out and can't get to an admin account to fix it,
+this can be done directly from Terminal:
+
+```bash
+cd "/Users/arun/Desktop/Anvay"
+source venv/bin/activate
+python3 -c "
+from werkzeug.security import generate_password_hash
+print(generate_password_hash('your-new-password-here', method='pbkdf2:sha256'))
+"
+```
+
+Copy the long string that prints out, then:
+
+```bash
+sqlite3 archive.db "UPDATE accounts SET password_hash = 'PASTE_THE_STRING_HERE' WHERE username = 'shaheeni';"
+```
 
 ## Home dashboard
 
@@ -55,6 +100,14 @@ their contents). The story list itself lives at "Stories" in the nav
 - `venv/` — a self-contained folder holding the exact tools this
   project needs, so it doesn't interfere with anything else on your
   computer.
+- `requirements.txt` — the list of those tools, used both by `venv/`
+  locally and by Render when it builds the hosted version.
+- `Procfile` — tells Render how to actually start the site
+  (`gunicorn app:app`) once it's built.
+- `instance/secret_key.txt` — a random value used to keep you logged in
+  between visits, generated automatically the first time the app runs
+  locally. Never shared or committed to git; the hosted version uses a
+  separate `SECRET_KEY` you set directly in Render instead.
 
 ## Adding a video entry
 
@@ -106,7 +159,7 @@ edit any of that from their profile's "Edit" button.
 Click "Contributions" in the top nav to see the shared feed — anyone
 in the family can add a memory, photo, story, tradition, or note. Each
 entry has a title, an optional longer write-up, an optional photo
-(stored in `static/uploads/`, unlike videos these are small enough to
+(stored in `uploads/`, unlike videos these are small enough to
 keep locally), who added it, and which family member(s) it's about.
 Filter the feed by type using the pills at the top — the "Photo"
 filter shows a proper gallery grid instead of a list. Anything tagged
@@ -121,10 +174,11 @@ recipient's profile only show who it's for and roughly how long until
 it unlocks. A sealed letter also can't be edited (delete and rewrite
 it if you need to change something before it opens).
 
-Worth knowing: the seal is an honor-system convention, not encryption
-— this app has no login, so anyone with access to the computer (or
-the `archive.db` file) could technically look. It's there to stop
-casual peeking, not a determined one.
+Worth knowing: the seal is enforced by the app for everyone (including
+whoever wrote the letter) until the unlock date, but it's not
+encryption — anyone with direct access to the `archive.db` file itself
+could technically read the raw text early. It's there to stop casual
+peeking within the app, not a determined look at the database file.
 
 ## Backing up / exporting your data
 
@@ -135,9 +189,9 @@ Because everything is in one SQLite file (`archive.db`), you can:
 - Export it to CSV or another format later — nothing here locks the
   data into this particular website.
 
-Uploaded photos live in `static/uploads/` — back that folder up
-alongside `archive.db` (the database only stores the filenames, not
-the image data itself).
+Uploaded photos live in `uploads/` (next to `archive.db`, both inside
+`DATA_DIR`) — back that folder up alongside `archive.db` (the database
+only stores the filenames, not the image data itself).
 
 ## Yearly almanac
 
@@ -152,9 +206,92 @@ hides the navigation and buttons and uses your browser's own
 print/PDF feature, so no extra software is needed to turn a year into
 something you could put in a printed book.
 
+## Deploying so the family can access it remotely
+
+Running it locally (above) is still the easiest way to develop or test
+changes. But so that family members can log in from their own phones or
+laptops, rather than everyone gathering around one computer, the same
+app can be hosted online at [Render.com](https://render.com) for about
+$7-8/month (their "Starter" web service plan plus a small persistent
+disk). This needs a few one-time setup steps that only you can do,
+since they involve creating accounts in your own name.
+
+### 1. Put the code on GitHub (one-time)
+
+The code already has a local git repository with everything committed
+(`git log` will show it). You just need somewhere on GitHub, privately,
+for Render to pull it from:
+
+1. Go to [github.com/new](https://github.com/new), sign in (or create a
+   free account), and create a new **private** repository — any name,
+   e.g. `anvay`. Don't check any of the "initialize with..." boxes.
+2. GitHub will show you a page with commands like `git remote add
+   origin ...`. Back in Terminal:
+
+```bash
+cd "/Users/arun/Desktop/Anvay"
+git remote add origin PASTE_THE_URL_GITHUB_GAVE_YOU
+git push -u origin main
+```
+
+### 2. Create the Render service (one-time)
+
+1. Go to [render.com](https://render.com) and sign up (you can sign in
+   with your GitHub account, which makes the next step easier).
+2. Click **New +** → **Web Service**, and connect the GitHub repo you
+   just pushed.
+3. Render should auto-detect Python. Set:
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn app:app` (this is also in the
+     `Procfile`, so Render may fill it in automatically)
+   - **Instance type**: Starter (the cheapest paid tier — the free tier
+     doesn't support the persistent disk this app needs)
+4. **Add a persistent disk** (Render calls this "Disks" in the service
+   settings) — **this step matters more than any other one here**.
+   Without it, every time you redeploy, all the photos, stories, and
+   people you've added would be wiped, because the container's own
+   filesystem is thrown away on each redeploy.
+   - Mount path: anything, e.g. `/var/data`
+   - Size: 1 GB is plenty to start
+5. **Add environment variables** (Render calls these "Environment"):
+   - `SECRET_KEY` — generate one by running this in Terminal:
+     `python3 -c "import secrets; print(secrets.token_hex(32))"`,
+     then paste the result in as the value.
+   - `DATA_DIR` — set this to the same mount path you chose above, e.g.
+     `/var/data`. This tells the app to store `archive.db` and keep
+     photos on the persistent disk instead of the throwaway container.
+6. Click **Create Web Service**. Render will build and deploy it, and
+   give you a URL like `https://anvay-xyz.onrender.com` — that's the
+   link the family uses to log in remotely. HTTPS is automatic, no
+   extra setup needed.
+
+The very first deploy creates a brand-new, empty `archive.db` on the
+disk — it starts blank, it does **not** copy your local data
+automatically. If you want the family to see the same tree/stories you
+already have locally, copy your local `archive.db` and `uploads/` folder
+onto the Render disk before inviting anyone in (Render's dashboard has a
+"Shell" tab that can help with this, or ask for help with this specific
+step when you get there).
+
+### 3. Every time you make future changes
+
+```bash
+cd "/Users/arun/Desktop/Anvay"
+git add -A
+git commit -m "Describe what changed"
+git push
+```
+
+Render watches the GitHub repo and redeploys automatically within a
+minute or two of each push. Local dev (`python3 app.py`) keeps working
+exactly as before, completely separately from the deployed version.
+
 ## What's next
 
-All the planned features are in place: story archive, family tree,
-contribution feed, time capsule letters, and the yearly almanac. From
-here it's about adding real family data — people, stories, memories —
-rather than new features, unless something new comes up.
+Login is in place, and the app can be deployed for remote/multi-device
+family access (see above). Next up is the planned "Legacy Book" feature
+— a time-boxed biography project for one person or a couple, compiled
+from their video interviews plus relatives' answers to targeted
+questions. Beyond that, it's mostly about adding real family data —
+people, stories, memories — rather than new features, unless something
+new comes up.

@@ -95,6 +95,8 @@ a { color: var(--brown-dark); }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 0.75rem;
   padding: 1.25rem 2rem;
   border-bottom: 1px solid var(--line);
   background-color: var(--paper);
@@ -114,11 +116,48 @@ a { color: var(--brown-dark); }
   display: block;
 }
 
+.site-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+}
+
 .site-header nav a {
   margin-left: 1.5rem;
   text-decoration: none;
   color: var(--ink);
   font-size: 1rem;
+  white-space: nowrap;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 0.5rem;
+  gap: 1.5rem;
+}
+
+.logout-form {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.current-person-name {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--brown);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 main {

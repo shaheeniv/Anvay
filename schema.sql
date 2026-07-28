@@ -3,6 +3,20 @@
 -- back up, or open with any standard SQLite tool if you ever want to move
 -- the data somewhere else.
 
+-- One row per family using this archive. Today there's only ever one row —
+-- this app is built for a single family, not as a public multi-tenant
+-- product — but shaping the data this way now means that door isn't
+-- expensive to open later: every other table already reaches a family
+-- transitively by joining through people.family_id, so nothing else needs
+-- its own family_id column.
+CREATE TABLE IF NOT EXISTS families (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT OR IGNORE INTO families (id, name) VALUES (1, 'The Vekaria-Bhudia Family');
+
 CREATE TABLE IF NOT EXISTS people (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,                 -- however they're known in the family (e.g. "Dada", "Nani", "Raj")
@@ -14,6 +28,7 @@ CREATE TABLE IF NOT EXISTS people (
     family_name TEXT,                   -- optional — names this person's family tree branch
                                          -- (only meaningful when they have no recorded parents,
                                          -- i.e. they're the eldest known ancestor of a branch)
+    family_id INTEGER NOT NULL REFERENCES families(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -60,6 +75,19 @@ CREATE TABLE IF NOT EXISTS contribution_people (
     contribution_id INTEGER NOT NULL REFERENCES contributions(id) ON DELETE CASCADE,
     person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
     PRIMARY KEY (contribution_id, person_id)
+);
+
+-- Login credentials. A separate table (not columns on people) because not
+-- everyone needs an account — young kids in the tree, for instance — and
+-- it mirrors the existing pattern of small single-purpose tables (spouses,
+-- contribution_people) rather than overloading people.
+CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER NOT NULL UNIQUE REFERENCES people(id) ON DELETE CASCADE,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Letters written now, addressed to someone, hidden until unlock_date passes.

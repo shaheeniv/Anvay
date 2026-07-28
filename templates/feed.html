@@ -21,7 +21,7 @@
           <li class="photo-gallery-item">
             <a href="{{ url_for('show_contribution', contribution_id=c['id']) }}">
               {% if c['photo_filename'] %}
-                <img src="{{ url_for('static', filename='uploads/' ~ c['photo_filename']) }}" alt="{{ c['title'] }}">
+                <img src="{{ url_for('uploaded_file', filename=c['photo_filename']) }}" alt="{{ c['title'] }}">
               {% else %}
                 <span class="photo-gallery-placeholder">No photo</span>
               {% endif %}
@@ -39,7 +39,7 @@
           <li class="entry-card feed-card">
             <a href="{{ url_for('show_contribution', contribution_id=c['id']) }}">
               {% if c['photo_filename'] %}
-                <img class="feed-thumb" src="{{ url_for('static', filename='uploads/' ~ c['photo_filename']) }}" alt="">
+                <img class="feed-thumb" src="{{ url_for('uploaded_file', filename=c['photo_filename']) }}" alt="">
               {% endif %}
               <span class="feed-card-body">
                 <span class="kind-badge kind-{{ c['kind'] }}">{{ kind_labels[c['kind']] }}</span>

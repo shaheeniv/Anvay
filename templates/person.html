@@ -22,6 +22,13 @@
     </div>
     <div class="entry-actions">
       <a class="button" href="{{ url_for('edit_person', person_id=person['id']) }}">Edit</a>
+      {% if current_person and current_person['is_admin'] %}
+        {% if account %}
+          <a class="button" href="{{ url_for('edit_account', person_id=person['id']) }}">Edit login</a>
+        {% else %}
+          <a class="button" href="{{ url_for('new_account', person_id=person['id']) }}">Set up login</a>
+        {% endif %}
+      {% endif %}
     </div>
   </div>
 

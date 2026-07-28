@@ -18,7 +18,7 @@
 
   {% if contribution['photo_filename'] %}
     <p class="contribution-photo">
-      <img src="{{ url_for('static', filename='uploads/' ~ contribution['photo_filename']) }}" alt="{{ contribution['title'] }}">
+      <img src="{{ url_for('uploaded_file', filename=contribution['photo_filename']) }}" alt="{{ contribution['title'] }}">
     </p>
   {% endif %}
 

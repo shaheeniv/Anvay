@@ -56,7 +56,7 @@
         {% for p in recent_photos %}
           <li class="photo-gallery-item">
             <a href="{{ url_for('show_contribution', contribution_id=p['id']) }}">
-              <img src="{{ url_for('static', filename='uploads/' ~ p['photo_filename']) }}" alt="{{ p['title'] }}">
+              <img src="{{ url_for('uploaded_file', filename=p['photo_filename']) }}" alt="{{ p['title'] }}">
               <span class="photo-gallery-caption">{{ p['title'] }}</span>
             </a>
           </li>

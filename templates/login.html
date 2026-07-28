@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Log in — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>Log in</h1>
+  </div>
+
+  <form class="entry-form" method="post" action="{{ url_for('login') }}">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" required autofocus autocomplete="username">
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required autocomplete="current-password">
+
+    <div class="form-actions">
+      <button type="submit" class="button">Log in</button>
+    </div>
+  </form>
+
+{% endblock %}

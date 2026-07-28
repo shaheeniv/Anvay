@@ -21,23 +21,24 @@ from datetime import date
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, flash, g, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Where the database lives — on a normal local run this is just BASE_DIR,
-# but a hosted deployment sets DATA_DIR to a persistent disk mount so the
-# data survives redeploys (a container's own filesystem is wiped on every
-# redeploy). Uploaded photos stay under static/uploads/ regardless, since
-# Flask's static file serving needs them at a fixed path relative to the
-# app — a hosted deployment should mount its persistent disk *at* that
-# exact path rather than somewhere else (see README).
+# Where the database and uploaded photos live — on a normal local run
+# this is just BASE_DIR, but a hosted deployment sets DATA_DIR to a
+# persistent disk mount so this data survives redeploys (a container's
+# own filesystem is wiped on every redeploy). Uploads are served through
+# a dedicated /uploads/<filename> route (below) rather than Flask's
+# static folder, since the static folder must live alongside the code
+# while DATA_DIR may point somewhere else entirely.
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR)))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATABASE = DATA_DIR / "archive.db"
 SCHEMA = BASE_DIR / "schema.sql"
-UPLOAD_DIR = BASE_DIR / "static" / "uploads"
+UPLOAD_DIR = DATA_DIR / "uploads"
 ALLOWED_PHOTO_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 CONTRIBUTION_KINDS = [
@@ -48,6 +49,11 @@ CONTRIBUTION_KINDS = [
     ("note", "Note"),
 ]
 CONTRIBUTION_KIND_LABELS = dict(CONTRIBUTION_KINDS)
+
+# This app is built for one family, not as a multi-tenant product — every
+# person just belongs to family row 1, seeded by schema.sql. See families
+# table in schema.sql for why this column exists at all.
+DEFAULT_FAMILY_ID = 1
 
 
 def _load_or_create_secret_key():
@@ -92,6 +98,97 @@ def init_db():
     db.executescript(SCHEMA.read_text())
     db.commit()
     db.close()
+
+
+# ---------------------------------------------------------------------------
+# Login / accounts
+# ---------------------------------------------------------------------------
+#
+# Plain Flask session (not Flask-Login) — this whole app is hand-rolled
+# with no extensions, and a signed session cookie holding just a person_id
+# is all real per-person login needs here. A single before_request gate
+# covers every existing route in one place instead of decorating each one.
+
+PUBLIC_ENDPOINTS = {"login", "static"}
+
+
+@app.before_request
+def require_login():
+    if request.endpoint in PUBLIC_ENDPOINTS or request.endpoint is None:
+        return None
+    if "person_id" not in session:
+        return redirect(url_for("login"))
+    return None
+
+
+def current_person():
+    """The logged-in person's row, joined with their account — or None."""
+    if "person_id" not in session:
+        return None
+    db = get_db()
+    return db.execute(
+        """
+        SELECT people.*, accounts.username, accounts.is_admin
+        FROM people
+        JOIN accounts ON accounts.person_id = people.id
+        WHERE people.id = ?
+        """,
+        (session["person_id"],),
+    ).fetchone()
+
+
+@app.context_processor
+def inject_current_person():
+    return {"current_person": current_person()}
+
+
+def require_admin(view):
+    """Route decorator for the handful of admin-only actions (creating
+    accounts, resetting passwords) — separate from the blanket login gate
+    above, since most routes just need someone logged in, not an admin."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        person = current_person()
+        if person is None or not person["is_admin"]:
+            return "Not authorized.", 403
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return render_template("login.html")
+
+    db = get_db()
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    account = db.execute(
+        "SELECT * FROM accounts WHERE username = ?", (username,)
+    ).fetchone()
+
+    if account is None or not check_password_hash(account["password_hash"], password):
+        flash("Incorrect username or password.")
+        return render_template("login.html"), 401
+
+    session.clear()
+    session["person_id"] = account["person_id"]
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/uploads/<path:filename>")
+def uploaded_file(filename):
+    """Serves contribution photos from UPLOAD_DIR (under DATA_DIR) —
+    not Flask's static folder, since DATA_DIR may live on a separate
+    persistent disk rather than alongside the code. Still behind the
+    login gate like every other route (not in PUBLIC_ENDPOINTS)."""
+    return send_from_directory(UPLOAD_DIR, filename)
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +417,10 @@ def add_relationship(person_id, relation, existing_id, new_name):
     if existing_id:
         target_id = int(existing_id)
     elif new_name and new_name.strip():
-        cur = db.execute("INSERT INTO people (name) VALUES (?)", (new_name.strip(),))
+        cur = db.execute(
+            "INSERT INTO people (name, family_id) VALUES (?, ?)",
+            (new_name.strip(), DEFAULT_FAMILY_ID),
+        )
         target_id = cur.lastrowid
 
     if target_id is None or target_id == person_id:
@@ -360,8 +460,8 @@ def create_person():
     db = get_db()
     cur = db.execute(
         """
-        INSERT INTO people (name, surname, birth_date, birth_place, three_words, notes, family_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO people (name, surname, birth_date, birth_place, three_words, notes, family_name, family_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             request.form["name"].strip(),
@@ -371,6 +471,7 @@ def create_person():
             request.form.get("three_words", "").strip() or None,
             request.form.get("notes", "").strip() or None,
             request.form.get("family_name", "").strip() or None,
+            DEFAULT_FAMILY_ID,
         ),
     )
     new_id = cur.lastrowid
@@ -452,6 +553,9 @@ def show_person(person_id):
         CAPSULE_QUERY + " WHERE time_capsules.recipient_id = ? ORDER BY time_capsules.unlock_date",
         (person_id,),
     ).fetchall()
+    account = db.execute(
+        "SELECT * FROM accounts WHERE person_id = ?", (person_id,)
+    ).fetchone()
 
     return render_template(
         "person.html",
@@ -466,7 +570,91 @@ def show_person(person_id):
         capsules=capsule_rows,
         is_unlocked=is_unlocked,
         describe_time_until=describe_time_until,
+        account=account,
     )
+
+
+@app.route("/people/<int:person_id>/account/new", methods=["GET", "POST"])
+@require_admin
+def new_account(person_id):
+    db = get_db()
+    person = db.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
+    if person is None:
+        return "Person not found", 404
+    existing = db.execute("SELECT * FROM accounts WHERE person_id = ?", (person_id,)).fetchone()
+    if existing is not None:
+        return redirect(url_for("edit_account", person_id=person_id))
+
+    if request.method == "GET":
+        return render_template("account_form.html", person=person, account=None, error=None)
+
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    is_admin = 1 if request.form.get("is_admin") else 0
+
+    if not username or not password:
+        return render_template(
+            "account_form.html", person=person, account=None,
+            error="Username and password are both required.",
+        )
+    if db.execute("SELECT 1 FROM accounts WHERE username = ?", (username,)).fetchone():
+        return render_template(
+            "account_form.html", person=person, account=None,
+            error=f'The username "{username}" is already taken.',
+        )
+
+    db.execute(
+        "INSERT INTO accounts (person_id, username, password_hash, is_admin) VALUES (?, ?, ?, ?)",
+        (person_id, username, generate_password_hash(password, method="pbkdf2:sha256"), is_admin),
+    )
+    db.commit()
+    flash(f"Login created for {person['name']}.")
+    return redirect(url_for("show_person", person_id=person_id))
+
+
+@app.route("/people/<int:person_id>/account/edit", methods=["GET", "POST"])
+@require_admin
+def edit_account(person_id):
+    db = get_db()
+    person = db.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
+    account = db.execute("SELECT * FROM accounts WHERE person_id = ?", (person_id,)).fetchone()
+    if person is None or account is None:
+        return "Not found", 404
+
+    if request.method == "GET":
+        return render_template("account_form.html", person=person, account=account, error=None)
+
+    username = request.form.get("username", "").strip()
+    new_password = request.form.get("password", "")
+    is_admin = 1 if request.form.get("is_admin") else 0
+
+    if not username:
+        return render_template(
+            "account_form.html", person=person, account=account,
+            error="Username is required.",
+        )
+    clash = db.execute(
+        "SELECT 1 FROM accounts WHERE username = ? AND person_id != ?", (username, person_id)
+    ).fetchone()
+    if clash:
+        return render_template(
+            "account_form.html", person=person, account=account,
+            error=f'The username "{username}" is already taken.',
+        )
+
+    if new_password:
+        db.execute(
+            "UPDATE accounts SET username = ?, password_hash = ?, is_admin = ? WHERE person_id = ?",
+            (username, generate_password_hash(new_password, method="pbkdf2:sha256"), is_admin, person_id),
+        )
+    else:
+        db.execute(
+            "UPDATE accounts SET username = ?, is_admin = ? WHERE person_id = ?",
+            (username, is_admin, person_id),
+        )
+    db.commit()
+    flash(f"Login details updated for {person['name']}.")
+    return redirect(url_for("show_person", person_id=person_id))
 
 
 @app.route("/people/<int:person_id>/edit")
@@ -1077,7 +1265,8 @@ def almanac(year):
     )
 
 
+if not DATABASE.exists():
+    init_db()
+
 if __name__ == "__main__":
-    if not DATABASE.exists():
-        init_db()
     app.run(debug=True)

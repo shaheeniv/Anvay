@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{% if account %}Edit Login{% else %}Set Up Login{% endif %} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>{% if account %}Edit login for {{ person['name'] }}{% else %}Set up login for {{ person['name'] }}{% endif %}</h1>
+  </div>
+
+  {% if error %}
+    <ul class="flash-messages"><li>{{ error }}</li></ul>
+  {% endif %}
+
+  <form
+    class="entry-form"
+    method="post"
+    action="{% if account %}{{ url_for('edit_account', person_id=person['id']) }}{% else %}{{ url_for('new_account', person_id=person['id']) }}{% endif %}"
+  >
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" required autocomplete="username"
+      value="{{ account['username'] if account else '' }}">
+
+    <label for="password">{% if account %}New password <span class="hint">(leave blank to keep the current one)</span>{% else %}Password{% endif %}</label>
+    <input type="password" id="password" name="password" {% if not account %}required{% endif %} autocomplete="new-password">
+
+    <div class="checkbox-list">
+      <label class="checkbox-item">
+        <input type="checkbox" name="is_admin" {% if account and account['is_admin'] %}checked{% endif %}>
+        Admin — can create/edit logins for others
+      </label>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="button">{% if account %}Save changes{% else %}Create login{% endif %}</button>
+      <a class="cancel-link" href="{{ url_for('show_person', person_id=person['id']) }}">Cancel</a>
+    </div>
+  </form>
+
+{% endblock %}

@@ -1,8 +1,9 @@
 venv/
 archive.db
+archive.db.bak*
 __pycache__/
 *.pyc
 instance/
-static/uploads/
+/uploads/
 .DS_Store
 .claude/
