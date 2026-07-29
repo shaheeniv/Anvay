@@ -50,8 +50,12 @@
       <form class="entry-form" method="post" action="{{ url_for('submit_book_answers', book_id=book['id']) }}">
         {% for question in questions %}
           <label for="question_{{ question['id'] }}">{{ question['text'] }}</label>
-          <textarea id="question_{{ question['id'] }}" name="question_{{ question['id'] }}" rows="4"
-            >{{ existing_answers.get(question['id'], '') }}</textarea>
+          <div class="dictate-row">
+            <textarea id="question_{{ question['id'] }}" name="question_{{ question['id'] }}" rows="4"
+              >{{ existing_answers.get(question['id'], '') }}</textarea>
+            <button type="button" class="small-button dictate-button"
+              data-dictate-target="question_{{ question['id'] }}">🎤 Dictate</button>
+          </div>
         {% endfor %}
         <div class="form-actions">
           <button type="submit" class="button">Save answers</button>
@@ -61,5 +65,74 @@
       <p class="hint">No questions available right now.</p>
     {% endif %}
   </section>
+
+  <script>
+    // Lets someone speak an answer instead of typing it, using the
+    // browser's own built-in speech recognition (same tech as iPhone
+    // dictation) — no server, no account, no cost. Safari and Chrome
+    // support this; browsers that don't just won't show the button.
+    (function () {
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var buttons = document.querySelectorAll('.dictate-button');
+      if (!SpeechRecognition) {
+        buttons.forEach(function (button) { button.style.display = 'none'; });
+        return;
+      }
+
+      buttons.forEach(function (button) {
+        var textarea = document.getElementById(button.dataset.dictateTarget);
+        if (!textarea) return;
+
+        var recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        var listening = false;
+        var baseText = '';
+
+        button.addEventListener('click', function () {
+          if (listening) {
+            recognition.stop();
+            return;
+          }
+          baseText = textarea.value;
+          if (baseText && !/\s$/.test(baseText)) baseText += ' ';
+          recognition.start();
+        });
+
+        recognition.addEventListener('start', function () {
+          listening = true;
+          button.classList.add('dictate-button--active');
+          button.textContent = '⏹ Stop';
+        });
+
+        recognition.addEventListener('end', function () {
+          listening = false;
+          button.classList.remove('dictate-button--active');
+          button.textContent = '🎤 Dictate';
+        });
+
+        recognition.addEventListener('result', function (event) {
+          var interim = '';
+          var final = '';
+          for (var i = event.resultIndex; i < event.results.length; i++) {
+            var transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              final += transcript;
+            } else {
+              interim += transcript;
+            }
+          }
+          if (final) baseText += final;
+          textarea.value = baseText + interim;
+        });
+
+        recognition.addEventListener('error', function (event) {
+          console.warn('Dictation error:', event.error);
+        });
+      });
+    })();
+  </script>
 
 {% endblock %}

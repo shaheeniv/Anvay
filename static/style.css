@@ -545,6 +545,27 @@ h2 {
   font-size: 0.9rem;
 }
 
+.dictate-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.dictate-row textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+.dictate-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.dictate-button--active {
+  background: var(--brown);
+  color: #fff;
+}
+
 /* Family tree — connector-line branch diagram
    The lines themselves are drawn by JS (see tree.html) after the browser
    lays out the boxes, using their real measured positions — a parent may

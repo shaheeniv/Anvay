@@ -241,7 +241,12 @@ children get the deepest set (their own upbringing, the subject's life
 before them, who the subject was as a parent), sons/daughters-in-law get
 a set about joining the family, grandchildren and great-grandchildren get
 shorter, more personal sets, and anyone else gets a small general set.
-Answers save per-person and can be revisited/edited any time.
+Answers save per-person and can be revisited/edited any time. Each
+question box has a **"🎤 Dictate"** button — click it and speak instead
+of typing, using your browser's own built-in speech recognition (the
+same technology as iPhone dictation). It's free, needs no setup, and
+works well for English. Supported in Safari and Chrome; if your browser
+doesn't support it, the button simply won't appear.
 
 Every new book starts with a default set of questions (an admin can
 customize it — see below), but **each book gets its own independent
