@@ -234,6 +234,15 @@ a set about joining the family, grandchildren and great-grandchildren get
 shorter, more personal sets, and anyone else gets a small general set.
 Answers save per-person and can be revisited/edited any time.
 
+Every new book starts with a default set of questions (an admin can
+customize it — see below), but **each book gets its own independent
+copy** — editing one book's questions never affects any other book. This
+matters because different branches of the family have genuinely
+different histories (e.g. one side migrated from Uganda, another from
+Kenya), so the default wording won't always fit. From a book's page,
+admins see an "Edit these questions for this book" link to reword any
+question just for that book.
+
 Each book also has its own **Photos** page ("View & add photos" from the
 book's page) — anyone can upload a photo, add a short description, and
 tag who's in it. These are kept separate from the main Contributions

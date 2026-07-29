@@ -43,6 +43,9 @@
 
   <section class="relation-section">
     <h2>Your questions</h2>
+    {% if current_person and current_person['is_admin'] %}
+      <a class="small-link" href="{{ url_for('edit_book_questions', book_id=book['id']) }}">Edit these questions for this book &rarr;</a>
+    {% endif %}
     {% if questions %}
       <form class="entry-form" method="post" action="{{ url_for('submit_book_answers', book_id=book['id']) }}">
         {% for question in questions %}

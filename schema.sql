@@ -123,14 +123,20 @@ CREATE TABLE IF NOT EXISTS book_subjects (
     PRIMARY KEY (book_project_id, person_id)
 );
 
--- Global default question bank, shared by every book project. target_relationship
--- is one of: child, child_in_law, grandchild, great_grandchild, any (a catch-all
+-- Question bank. Rows with book_project_id = NULL are the starting
+-- template, cloned into a book's own rows (book_project_id set) when
+-- that book is created — so each book's questions can be edited
+-- independently afterward (e.g. one family's migration story mentions
+-- Uganda, another's mentions Kenya) without affecting any other book or
+-- the shared template new books clone from. target_relationship is one
+-- of: child, child_in_law, grandchild, great_grandchild, any (a catch-all
 -- for anyone else, e.g. a grandchild's spouse, close family friends).
 CREATE TABLE IF NOT EXISTS book_questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     text TEXT NOT NULL,
     target_relationship TEXT NOT NULL,
-    sort_order INTEGER NOT NULL DEFAULT 0
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    book_project_id INTEGER REFERENCES book_projects(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS book_answers (

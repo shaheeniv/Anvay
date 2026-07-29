@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Edit Questions — {{ book['title'] }} — Anvay{% endblock %}
+{% block nav_section %}book{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <div>
+      <h1>Edit Questions</h1>
+      <p class="entry-meta">for {{ book['title'] }}</p>
+    </div>
+    <a class="button" href="{{ url_for('show_book', book_id=book['id']) }}">&larr; Back to {{ book['title'] }}</a>
+  </div>
+
+  <p class="hint">
+    These questions belong only to this book — editing them here won't
+    change any other Legacy Book. Useful for making a question specific
+    to this family's actual story (e.g. naming the country they migrated
+    from).
+  </p>
+
+  <form class="entry-form" method="post" action="{{ url_for('edit_book_questions', book_id=book['id']) }}">
+    {% for relationship, group in questions | groupby('target_relationship') %}
+      <section class="relation-section">
+        <h2>{{ relationship_labels.get(relationship, relationship) }}</h2>
+        {% for question in group %}
+          <label for="question_{{ question['id'] }}">Question {{ loop.index }}</label>
+          <textarea id="question_{{ question['id'] }}" name="question_{{ question['id'] }}" rows="2"
+            >{{ question['text'] }}</textarea>
+        {% endfor %}
+      </section>
+    {% endfor %}
+
+    <div class="form-actions">
+      <button type="submit" class="button">Save changes</button>
+    </div>
+  </form>
+
+{% endblock %}

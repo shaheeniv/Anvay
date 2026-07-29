@@ -925,6 +925,15 @@ def build_family_forest():
     return roots_meta, trees_by_root, unattached
 
 
+RELATIONSHIP_LABELS = {
+    "child": "Children",
+    "child_in_law": "Sons/daughters-in-law",
+    "grandchild": "Grandchildren",
+    "great_grandchild": "Great-grandchildren",
+    "any": "Anyone else",
+}
+
+
 def get_book_subject_ids(book_id):
     db = get_db()
     return [
@@ -1500,6 +1509,24 @@ def books_index():
     return render_template("books.html", projects=projects)
 
 
+def clone_question_bank_for_book(book_project_id):
+    """Copies the shared template (book_project_id IS NULL) into a new
+    book's own rows, so its questions can be edited independently later
+    without touching the template or any other book."""
+    db = get_db()
+    template_rows = db.execute(
+        "SELECT text, target_relationship, sort_order FROM book_questions"
+        " WHERE book_project_id IS NULL ORDER BY id"
+    ).fetchall()
+    for row in template_rows:
+        db.execute(
+            "INSERT INTO book_questions (text, target_relationship, sort_order, book_project_id)"
+            " VALUES (?, ?, ?, ?)",
+            (row["text"], row["target_relationship"], row["sort_order"], book_project_id),
+        )
+    db.commit()
+
+
 @app.route("/books/new", methods=["GET", "POST"])
 @require_admin
 def new_book():
@@ -1534,6 +1561,7 @@ def new_book():
             (book_id, pid),
         )
     db.commit()
+    clone_question_bank_for_book(book_id)
     return redirect(url_for("show_book", book_id=book_id))
 
 
@@ -1568,8 +1596,8 @@ def show_book(book_id):
     relationship = classify_relationship(subject_ids, viewer_id)
 
     questions = db.execute(
-        "SELECT * FROM book_questions WHERE target_relationship = ? ORDER BY sort_order",
-        (relationship,),
+        "SELECT * FROM book_questions WHERE book_project_id = ? AND target_relationship = ? ORDER BY sort_order",
+        (book_id, relationship),
     ).fetchall()
 
     existing_answers = {
@@ -1598,6 +1626,39 @@ def show_book(book_id):
         existing_answers=existing_answers,
         contributor_count=contributor_count,
         photo_count=photo_count,
+    )
+
+
+@app.route("/books/<int:book_id>/questions/edit", methods=["GET", "POST"])
+@require_admin
+def edit_book_questions(book_id):
+    db = get_db()
+    book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        return "Book not found", 404
+
+    if request.method == "POST":
+        for key, value in request.form.items():
+            if not key.startswith("question_"):
+                continue
+            question_id = int(key[len("question_"):])
+            new_text = value.strip()
+            if new_text:
+                db.execute(
+                    "UPDATE book_questions SET text = ? WHERE id = ? AND book_project_id = ?",
+                    (new_text, question_id, book_id),
+                )
+        db.commit()
+        flash("Questions updated for this book.")
+        return redirect(url_for("show_book", book_id=book_id))
+
+    questions = db.execute(
+        "SELECT * FROM book_questions WHERE book_project_id = ? ORDER BY target_relationship, sort_order",
+        (book_id,),
+    ).fetchall()
+    return render_template(
+        "book_questions_edit.html", book=book, questions=questions,
+        relationship_labels=RELATIONSHIP_LABELS,
     )
 
 
