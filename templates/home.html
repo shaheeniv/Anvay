@@ -13,12 +13,10 @@
         <span class="family-box-name">Family Portal</span>
         <span class="family-box-cta">Videos, family tree, contributions &rarr;</span>
       </a>
-      {% for project in projects %}
-        <a class="family-box-link" href="{{ url_for('show_book', book_id=project['id']) }}">
-          <span class="family-box-name">{{ project['title'] }}</span>
-          <span class="family-box-cta">Legacy Book &rarr;</span>
-        </a>
-      {% endfor %}
+      <a class="family-box-link" href="{{ url_for('books_index') }}">
+        <span class="family-box-name">Legacy Books</span>
+        <span class="family-box-cta">Take me to my Legacy Books &rarr;</span>
+      </a>
     </div>
   </section>
 

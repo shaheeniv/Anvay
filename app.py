@@ -193,11 +193,12 @@ def uploaded_file(filename):
 @app.route("/home")
 def home():
     """Post-login landing page: a choice between the ongoing Family
-    Portal (the dashboard below) and any Legacy Book projects. The
-    dashboard itself is unchanged — just one click further in now."""
-    db = get_db()
-    projects = db.execute("SELECT * FROM book_projects ORDER BY created_at DESC").fetchall()
-    return render_template("home.html", projects=projects)
+    Portal (the dashboard below) and the Legacy Books index (which lists
+    every book project — there will be more than one over time, one per
+    family branch, so this links to the index rather than listing each
+    one here directly). The dashboard itself is unchanged — just one
+    click further in now."""
+    return render_template("home.html")
 
 
 # ---------------------------------------------------------------------------
