@@ -20,14 +20,19 @@
       <img src="{{ url_for('static', filename='logo.png') }}" alt="Anvay" class="site-logo">
     </a>
     {% if current_person %}
+    {% set nav_section %}{% block nav_section %}portal{% endblock %}{% endset %}
+    {% set nav_section = nav_section.strip() %}
     <div class="header-right">
       <nav>
-        <a href="{{ url_for('home') }}">Home</a>
-        <a href="{{ url_for('stories') }}">Videos</a>
-        <a href="{{ url_for('tree') }}">Family Tree</a>
-        <a href="{{ url_for('feed') }}">Contributions</a>
-        <a href="{{ url_for('capsules') }}">Time Capsules</a>
-        <a href="{{ url_for('books_index') }}">Legacy Books</a>
+        {% if nav_section == 'portal' %}
+          <a href="{{ url_for('home') }}">Home</a>
+          <a href="{{ url_for('stories') }}">Videos</a>
+          <a href="{{ url_for('tree') }}">Family Tree</a>
+          <a href="{{ url_for('feed') }}">Contributions</a>
+          <a href="{{ url_for('capsules') }}">Time Capsules</a>
+        {% elif nav_section == 'book' %}
+          <a href="{{ url_for('home') }}">Home</a>
+        {% endif %}
       </nav>
       <form class="logout-form" method="post" action="{{ url_for('logout') }}">
         <span class="current-person-name">{{ current_person['name'] }}</span>
