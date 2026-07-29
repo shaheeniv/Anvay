@@ -190,14 +190,15 @@ def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 
-@app.route("/home")
+@app.route("/")
 def home():
-    """Post-login landing page: a choice between the ongoing Family
-    Portal (the dashboard below) and the Legacy Books index (which lists
-    every book project — there will be more than one over time, one per
-    family branch, so this links to the index rather than listing each
-    one here directly). The dashboard itself is unchanged — just one
-    click further in now."""
+    """The site's front door: a choice between the ongoing Family Portal
+    (the dashboard below, at /dashboard) and the Legacy Books index
+    (which lists every book project — there will be more than one over
+    time, one per family branch, so this links to the index rather than
+    listing each one here directly). Lives at "/" so returning visitors
+    with an existing session land here too, not straight into either
+    product."""
     return render_template("home.html")
 
 
@@ -205,7 +206,7 @@ def home():
 # Dashboard
 # ---------------------------------------------------------------------------
 
-@app.route("/")
+@app.route("/dashboard")
 def dashboard():
     db = get_db()
 
