@@ -38,7 +38,7 @@
       value="{{ (entry['topic'] or '') if entry else '' }}">
 
     {% if not entry %}
-      <label for="video_file">Video file <span class="hint">(optional — uploading here stores the video and automatically fills in the Gujarati transcript and English translation below)</span></label>
+      <label for="video_file">Video file <span class="hint">(optional — uploading here stores the video and plays it right on this entry)</span></label>
       <input type="file" id="video_file" name="video_file" accept="video/mp4,video/quicktime,video/x-m4v,video/avi,video/webm">
     {% elif entry['video_filename'] %}
       <label>Video</label>

@@ -1,5 +1,2 @@
 Flask
 gunicorn
-openai
-imageio-ffmpeg
-indic-transliteration

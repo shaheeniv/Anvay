@@ -377,14 +377,6 @@ h2 {
   background: #000;
 }
 
-.transcription-status {
-  margin-bottom: 1.5rem;
-}
-
-.transcription-status--failed {
-  color: var(--brown-dark);
-}
-
 .video-link a {
   text-decoration: none;
   font-weight: bold;

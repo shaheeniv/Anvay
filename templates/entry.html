@@ -21,19 +21,6 @@
     </p>
   {% endif %}
 
-  {% if entry['transcription_status'] in ('pending', 'processing') %}
-    <p class="hint transcription-status">
-      Transcribing this video automatically (Gujarati + English) — this can
-      take a few minutes. Refresh this page to check.
-    </p>
-  {% elif entry['transcription_status'] == 'failed' %}
-    <p class="hint transcription-status transcription-status--failed">
-      Automatic transcription didn't work for this video
-      {% if entry['transcription_error'] %} ({{ entry['transcription_error'] }}){% endif %} —
-      add the transcript by hand instead using "Edit" above.
-    </p>
-  {% endif %}
-
   <div class="transcript-columns">
     <div class="transcript-block">
       <h2>Gujarati (original)</h2>
