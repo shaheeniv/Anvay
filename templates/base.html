@@ -28,6 +28,7 @@
         <a href="{{ url_for('feed') }}">Contributions</a>
         <a href="{{ url_for('capsules') }}">Time Capsules</a>
         <a href="{{ url_for('almanac_redirect') }}">Almanac</a>
+        <a href="{{ url_for('books_index') }}">Legacy Books</a>
       </nav>
       <form class="logout-form" method="post" action="{{ url_for('logout') }}">
         <span class="current-person-name">{{ current_person['name'] }}</span>

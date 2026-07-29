@@ -206,6 +206,29 @@ hides the navigation and buttons and uses your browser's own
 print/PDF feature, so no extra software is needed to turn a year into
 something you could put in a printed book.
 
+## Legacy Books
+
+Click "Legacy Books" in the top nav for a second thing this site can do,
+separate from the ongoing family portal above: a time-boxed biography
+project for one person or a couple (e.g. "The Life of Mavji & Radha").
+
+An admin starts one from "+ New Book" by picking one person, or a couple,
+as the subject. From then on, the subject's own video interviews (already
+logged under "Stories") automatically form the spine of the book, and
+everyone else in the family who visits that book's page is shown a set of
+interview questions tailored to how they're related to the subject —
+children get the deepest set (their own upbringing, the subject's life
+before them, who the subject was as a parent), sons/daughters-in-law get
+a set about joining the family, grandchildren and great-grandchildren get
+shorter, more personal sets, and anyone else gets a small general set.
+Answers save per-person and can be revisited/edited any time.
+
+What's built so far is just the data-collection side — gathering the
+interviews and everyone's answers in one place. Turning all of that into
+an actual compiled, readable book (using AI to weave the video interviews
+and answers into flowing chapters) and a proper reading/print view are
+still to come.
+
 ## Deploying so the family can access it remotely
 
 Running it locally (above) is still the easiest way to develop or test
@@ -288,10 +311,10 @@ exactly as before, completely separately from the deployed version.
 
 ## What's next
 
-Login is in place, and the app can be deployed for remote/multi-device
-family access (see above). Next up is the planned "Legacy Book" feature
-— a time-boxed biography project for one person or a couple, compiled
-from their video interviews plus relatives' answers to targeted
-questions. Beyond that, it's mostly about adding real family data —
-people, stories, memories — rather than new features, unless something
-new comes up.
+Login, remote hosting, and the Legacy Book question-collection flow are
+all in place. What's left on the Legacy Book side: using AI to compile
+the collected interviews and answers into an actual written biography,
+and a proper reading/print view for the finished result — plus, further
+out, a single landing page after login to choose between the family
+portal and a Legacy Book, rather than reaching Legacy Books from the nav
+bar as it works today.

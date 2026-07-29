@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Legacy Books — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>Legacy Books</h1>
+    {% if current_person and current_person['is_admin'] %}
+      <a class="button" href="{{ url_for('new_book') }}">+ New Book</a>
+    {% endif %}
+  </div>
+
+  <p class="hint">
+    A Legacy Book is a full written biography for one person or a couple —
+    their own video interviews form the spine, and everyone else answers
+    questions tailored to how they're related.
+  </p>
+
+  {% if projects %}
+    <ul class="entry-list">
+      {% for project in projects %}
+        <li class="entry-card">
+          <a href="{{ url_for('show_book', book_id=project['id']) }}">
+            <span class="entry-person">{{ project['title'] }}</span>
+            <span class="entry-date">{{ project['status'] }}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="hint">No Legacy Books started yet.</p>
+  {% endif %}
+
+{% endblock %}

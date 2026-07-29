@@ -851,6 +851,48 @@ def build_family_forest():
     return roots_meta, trees_by_root, unattached
 
 
+def classify_relationship(subject_ids, viewer_id):
+    """Classify viewer_id's relationship to a Legacy Book's subject(s) (one
+    person or a couple), for picking which question set they see:
+    child, child_in_law, grandchild, great_grandchild, or any (catch-all —
+    e.g. a grandchild's spouse, or anyone more distantly related)."""
+    db = get_db()
+    children_of = defaultdict(list)
+    for row in db.execute("SELECT parent_id, child_id FROM parent_child"):
+        children_of[row["parent_id"]].append(row["child_id"])
+    spouses_of = defaultdict(list)
+    for row in db.execute("SELECT person_a_id, person_b_id FROM spouses"):
+        spouses_of[row["person_a_id"]].append(row["person_b_id"])
+        spouses_of[row["person_b_id"]].append(row["person_a_id"])
+
+    children = set()
+    for sid in subject_ids:
+        children.update(children_of.get(sid, []))
+    if viewer_id in children:
+        return "child"
+
+    children_in_law = set()
+    for cid in children:
+        children_in_law.update(spouses_of.get(cid, []))
+    children_in_law -= children
+    if viewer_id in children_in_law:
+        return "child_in_law"
+
+    grandchildren = set()
+    for cid in children:
+        grandchildren.update(children_of.get(cid, []))
+    if viewer_id in grandchildren:
+        return "grandchild"
+
+    great_grandchildren = set()
+    for gid in grandchildren:
+        great_grandchildren.update(children_of.get(gid, []))
+    if viewer_id in great_grandchildren:
+        return "great_grandchild"
+
+    return "any"
+
+
 @app.route("/tree")
 def tree():
     roots_meta, trees_by_root, unattached = build_family_forest()
@@ -1187,6 +1229,142 @@ def delete_capsule(capsule_id):
     db.execute("DELETE FROM time_capsules WHERE id = ?", (capsule_id,))
     db.commit()
     return redirect(url_for("capsules"))
+
+
+# ---------------------------------------------------------------------------
+# Legacy Books
+# ---------------------------------------------------------------------------
+
+@app.route("/books")
+def books_index():
+    db = get_db()
+    projects = db.execute("SELECT * FROM book_projects ORDER BY created_at DESC").fetchall()
+    return render_template("books.html", projects=projects)
+
+
+@app.route("/books/new", methods=["GET", "POST"])
+@require_admin
+def new_book():
+    db = get_db()
+    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+
+    if request.method == "GET":
+        return render_template("book_new.html", people=people, error=None, selected_ids=[], title="")
+
+    subject_ids = [int(pid) for pid in request.form.getlist("subject_ids")]
+    title = request.form.get("title", "").strip()
+
+    if not subject_ids or len(subject_ids) > 2:
+        return render_template(
+            "book_new.html", people=people,
+            error="Pick one person, or a couple (two people).",
+            selected_ids=subject_ids, title=title,
+        )
+
+    if not title:
+        names = [p["name"] for p in people if p["id"] in subject_ids]
+        title = f"The Life of {' & '.join(names)}"
+
+    cur = db.execute(
+        "INSERT INTO book_projects (title, created_by) VALUES (?, ?)",
+        (title, session["person_id"]),
+    )
+    book_id = cur.lastrowid
+    for pid in subject_ids:
+        db.execute(
+            "INSERT INTO book_subjects (book_project_id, person_id) VALUES (?, ?)",
+            (book_id, pid),
+        )
+    db.commit()
+    return redirect(url_for("show_book", book_id=book_id))
+
+
+@app.route("/books/<int:book_id>")
+def show_book(book_id):
+    db = get_db()
+    book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        return "Book not found", 404
+
+    subjects = db.execute(
+        """
+        SELECT people.* FROM book_subjects
+        JOIN people ON people.id = book_subjects.person_id
+        WHERE book_subjects.book_project_id = ?
+        ORDER BY people.name
+        """,
+        (book_id,),
+    ).fetchall()
+    subject_ids = [s["id"] for s in subjects]
+
+    entries = []
+    if subject_ids:
+        placeholders = ",".join("?" * len(subject_ids))
+        entries = db.execute(
+            ENTRY_QUERY + f" WHERE video_entries.person_id IN ({placeholders})"
+            " ORDER BY video_entries.date_recorded",
+            subject_ids,
+        ).fetchall()
+
+    viewer_id = session["person_id"]
+    relationship = classify_relationship(subject_ids, viewer_id)
+
+    questions = db.execute(
+        "SELECT * FROM book_questions WHERE target_relationship = ? ORDER BY sort_order",
+        (relationship,),
+    ).fetchall()
+
+    existing_answers = {
+        row["question_id"]: row["answer_text"]
+        for row in db.execute(
+            "SELECT question_id, answer_text FROM book_answers WHERE book_project_id = ? AND person_id = ?",
+            (book_id, viewer_id),
+        )
+    }
+
+    contributor_count = db.execute(
+        "SELECT COUNT(DISTINCT person_id) AS c FROM book_answers WHERE book_project_id = ?",
+        (book_id,),
+    ).fetchone()["c"]
+
+    return render_template(
+        "book.html",
+        book=book,
+        subjects=subjects,
+        entries=entries,
+        questions=questions,
+        existing_answers=existing_answers,
+        contributor_count=contributor_count,
+    )
+
+
+@app.route("/books/<int:book_id>/answers", methods=["POST"])
+def submit_book_answers(book_id):
+    db = get_db()
+    book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        return "Book not found", 404
+
+    viewer_id = session["person_id"]
+    for key, value in request.form.items():
+        if not key.startswith("question_"):
+            continue
+        question_id = int(key[len("question_"):])
+        answer_text = value.strip()
+        if not answer_text:
+            continue
+        db.execute(
+            """
+            INSERT INTO book_answers (book_project_id, question_id, person_id, answer_text)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(book_project_id, question_id, person_id)
+            DO UPDATE SET answer_text = excluded.answer_text
+            """,
+            (book_id, question_id, viewer_id, answer_text),
+        )
+    db.commit()
+    flash("Your answers have been saved.")
+    return redirect(url_for("show_book", book_id=book_id))
 
 
 # ---------------------------------------------------------------------------

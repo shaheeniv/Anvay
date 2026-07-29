@@ -102,3 +102,81 @@ CREATE TABLE IF NOT EXISTS time_capsules (
     unlock_date TEXT NOT NULL,          -- YYYY-MM-DD; sealed until this date passes
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- "Legacy Book" projects: a time-boxed biography for one person or a couple.
+-- The subject's own video_entries form the spine; everyone else answers
+-- targeted questions instead, grouped by their relationship to the subject.
+CREATE TABLE IF NOT EXISTS book_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,                        -- e.g. "The Life of Mavji & Radha"
+    status TEXT NOT NULL DEFAULT 'collecting',  -- collecting, compiling, ready
+    created_by INTEGER REFERENCES people(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 1 row = a single subject, 2 rows = a couple. Its own table (not nullable
+-- columns on book_projects) so "one person or a couple" is just "1 or 2
+-- rows," not a special case.
+CREATE TABLE IF NOT EXISTS book_subjects (
+    book_project_id INTEGER NOT NULL REFERENCES book_projects(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES people(id),
+    PRIMARY KEY (book_project_id, person_id)
+);
+
+-- Global default question bank, shared by every book project. target_relationship
+-- is one of: child, child_in_law, grandchild, great_grandchild, any (a catch-all
+-- for anyone else, e.g. a grandchild's spouse, close family friends).
+CREATE TABLE IF NOT EXISTS book_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    target_relationship TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS book_answers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_project_id INTEGER NOT NULL REFERENCES book_projects(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES book_questions(id),
+    person_id INTEGER NOT NULL REFERENCES people(id),
+    answer_text TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(book_project_id, question_id, person_id)
+);
+
+-- Seed the default question bank (only runs once — INSERT OR IGNORE against
+-- fixed ids means re-running schema.sql on an existing database is safe).
+-- "child" is deliberately the longest and most structured section (Uganda →
+-- Oldham → who they were as parents), since it's the spine of the book.
+INSERT OR IGNORE INTO book_questions (id, text, target_relationship, sort_order) VALUES
+    (1, 'What do you remember about life in Uganda before you left?', 'child', 1),
+    (2, 'What do you know about how and why the family left Uganda for Oldham — what was that journey like?', 'child', 2),
+    (3, 'What was it like arriving in Oldham and starting over?', 'child', 3),
+    (4, 'What was your childhood like growing up in Oldham?', 'child', 4),
+    (5, 'What did your parents tell you about their own upbringing, before you were born?', 'child', 5),
+    (6, 'What''s your earliest memory of your parents?', 'child', 6),
+    (7, 'What values or sayings do you most associate with them?', 'child', 7),
+    (8, 'How did they show love or care day-to-day?', 'child', 8),
+    (9, 'What''s a hard time in your life they helped you through?', 'child', 9),
+    (10, 'What''s a story about them you find yourself retelling?', 'child', 10),
+    (11, 'What do you think they were proudest of?', 'child', 11),
+    (12, 'What do you wish more people knew about them?', 'child', 12),
+
+    (13, 'How did they welcome you into the family?', 'child_in_law', 1),
+    (14, 'What''s your favorite memory with them since joining the family?', 'child_in_law', 2),
+    (15, 'What have you come to admire about them?', 'child_in_law', 3),
+    (16, 'Did your spouse (their child) ever tell you something about them that changed how you saw them?', 'child_in_law', 4),
+    (17, 'What do you wish more people knew about them?', 'child_in_law', 5),
+
+    (18, 'What''s your favorite memory with them?', 'grandchild', 1),
+    (19, 'What do they always say or do that makes you smile?', 'grandchild', 2),
+    (20, 'What have they taught you — a skill, a recipe, a value?', 'grandchild', 3),
+    (21, 'What''s something about their life before you were born that surprises you?', 'grandchild', 4),
+    (22, 'If you could ask them one more question, what would it be?', 'grandchild', 5),
+
+    (23, 'What''s your favorite memory with them, if you have one?', 'great_grandchild', 1),
+    (24, 'What''s one thing you know about them that you''d want to remember when you''re older?', 'great_grandchild', 2),
+    (25, 'What would you want to ask them if you could?', 'great_grandchild', 3),
+
+    (26, 'How did you come to know them?', 'any', 1),
+    (27, 'What''s a memory or story about them that''s stayed with you?', 'any', 2),
+    (28, 'What would you want future generations to know about them?', 'any', 3);

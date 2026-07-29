@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}New Legacy Book — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>Start a Legacy Book</h1>
+  </div>
+
+  <p class="hint">Pick one person, or a couple (two people), to be the subject.</p>
+
+  {% if error %}
+    <ul class="flash-messages"><li>{{ error }}</li></ul>
+  {% endif %}
+
+  <form class="entry-form" method="post" action="{{ url_for('new_book') }}">
+    <label>Subject(s)</label>
+    <div class="checkbox-list">
+      {% for person in people %}
+        <label class="checkbox-item">
+          <input type="checkbox" name="subject_ids" value="{{ person['id'] }}"
+            {% if person['id'] in selected_ids %}checked{% endif %}>
+          {{ person['name'] }}{% if person['surname'] %} {{ person['surname'] }}{% endif %}
+        </label>
+      {% endfor %}
+    </div>
+
+    <label for="title">Title <span class="hint">(optional — defaults to "The Life of ...")</span></label>
+    <input type="text" id="title" name="title" placeholder="e.g. The Life of Mavji &amp; Radha" value="{{ title }}">
+
+    <div class="form-actions">
+      <button type="submit" class="button">Start book</button>
+      <a class="cancel-link" href="{{ url_for('books_index') }}">Cancel</a>
+    </div>
+  </form>
+
+{% endblock %}

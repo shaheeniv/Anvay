@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ book['title'] }} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <div>
+      <h1>{{ book['title'] }}</h1>
+      <p class="entry-meta">
+        {{ subjects | map(attribute='name') | join(' & ') }}
+        · {{ contributor_count }} contributor{{ 's' if contributor_count != 1 else '' }} so far
+      </p>
+    </div>
+  </div>
+
+  <section class="relation-section">
+    <h2>Their own interviews</h2>
+    {% if entries %}
+      <ul class="entry-list">
+        {% for entry in entries %}
+          <li class="entry-card">
+            <a href="{{ url_for('show_entry', entry_id=entry['id']) }}">
+              <span class="entry-person">{{ entry['person_name'] }}</span>
+              <span class="entry-date">{{ entry['date_recorded'] }}</span>
+              {% if entry['topic'] %}<span class="entry-topic">{{ entry['topic'] }}</span>{% endif %}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No video interviews logged yet for {{ subjects | map(attribute='name') | join(' & ') }}.</p>
+    {% endif %}
+  </section>
+
+  <section class="relation-section">
+    <h2>Your questions</h2>
+    {% if questions %}
+      <form class="entry-form" method="post" action="{{ url_for('submit_book_answers', book_id=book['id']) }}">
+        {% for question in questions %}
+          <label for="question_{{ question['id'] }}">{{ question['text'] }}</label>
+          <textarea id="question_{{ question['id'] }}" name="question_{{ question['id'] }}" rows="4"
+            >{{ existing_answers.get(question['id'], '') }}</textarea>
+        {% endfor %}
+        <div class="form-actions">
+          <button type="submit" class="button">Save answers</button>
+        </div>
+      </form>
+    {% else %}
+      <p class="hint">No questions available right now.</p>
+    {% endif %}
+  </section>
+
+{% endblock %}
