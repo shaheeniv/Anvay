@@ -16,18 +16,17 @@
   <div class="corner-motif corner-motif--br" aria-hidden="true"></div>
 
   <header class="site-header">
-    <a class="site-title" href="{{ url_for('dashboard') }}">
+    <a class="site-title" href="{{ url_for('home') }}">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="Anvay" class="site-logo">
     </a>
     {% if current_person %}
     <div class="header-right">
       <nav>
-        <a href="{{ url_for('dashboard') }}">Home</a>
-        <a href="{{ url_for('stories') }}">Stories</a>
+        <a href="{{ url_for('home') }}">Home</a>
+        <a href="{{ url_for('stories') }}">Videos</a>
         <a href="{{ url_for('tree') }}">Family Tree</a>
         <a href="{{ url_for('feed') }}">Contributions</a>
         <a href="{{ url_for('capsules') }}">Time Capsules</a>
-        <a href="{{ url_for('almanac_redirect') }}">Almanac</a>
         <a href="{{ url_for('books_index') }}">Legacy Books</a>
       </nav>
       <form class="logout-form" method="post" action="{{ url_for('logout') }}">

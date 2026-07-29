@@ -73,18 +73,24 @@ Copy the long string that prints out, then:
 sqlite3 archive.db "UPDATE accounts SET password_hash = 'PASTE_THE_STRING_HERE' WHERE username = 'shaheeni';"
 ```
 
+## Landing page
+
+Logging in (or clicking the logo/"Home") takes you to a chooser between
+the two things this site does: the **Family Portal** (everything below)
+and any **Legacy Books** in progress. Click "Family Portal" to reach the
+dashboard.
+
 ## Home dashboard
 
-Opening the site (or clicking the logo/"Home") shows the Anvay logo
-and tagline centered up top, followed by a "Your Family" / "Your
-Families" box — one large clickable card per named family branch,
-taking you straight to that branch on the Family Tree page. Below
-that: how many people are in the tree, how many stories/contributions/
-letters exist, a strip of recent photos, quick "+" buttons to jump
-straight to adding something, and a combined "recent activity" list
-across everything that's been added — new people, videos,
+The dashboard shows the Anvay logo and tagline centered up top, followed
+by a "Your Family" / "Your Families" box — one large clickable card per
+named family branch, taking you straight to that branch on the Family
+Tree page. Below that: how many people are in the tree, how many
+videos/contributions/letters exist, a strip of recent photos, quick "+"
+buttons to jump straight to adding something, and a combined "recent
+activity" list across everything that's been added — new people, videos,
 contributions, and letters (sealed letters show up without revealing
-their contents). The story list itself lives at "Stories" in the nav
+their contents). The video list itself lives at "Videos" in the nav
 / `/stories`.
 
 ## What each part is, in plain terms
@@ -157,7 +163,7 @@ edit any of that from their profile's "Edit" button.
 ## Contribution feed
 
 Click "Contributions" in the top nav to see the shared feed — anyone
-in the family can add a memory, photo, story, tradition, or note. Each
+in the family can add a memory, photo, story, or tradition. Each
 entry has a title, an optional longer write-up, an optional photo
 (stored in `uploads/`, unlike videos these are small enough to
 keep locally), who added it, and which family member(s) it's about.
@@ -193,19 +199,6 @@ Uploaded photos live in `uploads/` (next to `archive.db`, both inside
 `DATA_DIR`) — back that folder up alongside `archive.db` (the database
 only stores the filenames, not the image data itself).
 
-## Yearly almanac
-
-Click "Almanac" to see everything added in a given year in one place:
-new people in the family tree, stories/videos recorded, contributions
-added, and any time capsule letters that unlocked that year (still
-sealed ones don't show up until they actually open). Use the arrows
-to move between years.
-
-Click "Print / Save as PDF" to get a clean, printable version — it
-hides the navigation and buttons and uses your browser's own
-print/PDF feature, so no extra software is needed to turn a year into
-something you could put in a printed book.
-
 ## Legacy Books
 
 Click "Legacy Books" in the top nav for a second thing this site can do,
@@ -214,7 +207,7 @@ project for one person or a couple (e.g. "The Life of Mavji & Radha").
 
 An admin starts one from "+ New Book" by picking one person, or a couple,
 as the subject. From then on, the subject's own video interviews (already
-logged under "Stories") automatically form the spine of the book, and
+logged under "Videos") automatically form the spine of the book, and
 everyone else in the family who visits that book's page is shown a set of
 interview questions tailored to how they're related to the subject —
 children get the deepest set (their own upbringing, the subject's life

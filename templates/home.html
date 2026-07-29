@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header hero-header">
+    <img src="{{ url_for('static', filename='logo-full.png') }}" alt="Anvay — Stories, Roots, Legacy" class="hero-logo">
+  </div>
+
+  <section class="family-box">
+    <h2>What would you like to open?</h2>
+    <div class="family-box-links">
+      <a class="family-box-link" href="{{ url_for('dashboard') }}">
+        <span class="family-box-name">Family Portal</span>
+        <span class="family-box-cta">Videos, family tree, contributions &rarr;</span>
+      </a>
+      {% for project in projects %}
+        <a class="family-box-link" href="{{ url_for('show_book', book_id=project['id']) }}">
+          <span class="family-box-name">{{ project['title'] }}</span>
+          <span class="family-box-cta">Legacy Book &rarr;</span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+{% endblock %}

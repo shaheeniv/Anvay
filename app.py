@@ -46,7 +46,6 @@ CONTRIBUTION_KINDS = [
     ("photo", "Photo"),
     ("story", "Story"),
     ("tradition", "Tradition"),
-    ("note", "Note"),
 ]
 CONTRIBUTION_KIND_LABELS = dict(CONTRIBUTION_KINDS)
 
@@ -173,7 +172,7 @@ def login():
 
     session.clear()
     session["person_id"] = account["person_id"]
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("home"))
 
 
 @app.route("/logout", methods=["POST"])
@@ -189,6 +188,16 @@ def uploaded_file(filename):
     persistent disk rather than alongside the code. Still behind the
     login gate like every other route (not in PUBLIC_ENDPOINTS)."""
     return send_from_directory(UPLOAD_DIR, filename)
+
+
+@app.route("/home")
+def home():
+    """Post-login landing page: a choice between the ongoing Family
+    Portal (the dashboard below) and any Legacy Book projects. The
+    dashboard itself is unchanged — just one click further in now."""
+    db = get_db()
+    projects = db.execute("SELECT * FROM book_projects ORDER BY created_at DESC").fetchall()
+    return render_template("home.html", projects=projects)
 
 
 # ---------------------------------------------------------------------------
@@ -1365,82 +1374,6 @@ def submit_book_answers(book_id):
     db.commit()
     flash("Your answers have been saved.")
     return redirect(url_for("show_book", book_id=book_id))
-
-
-# ---------------------------------------------------------------------------
-# Yearly almanac
-# ---------------------------------------------------------------------------
-
-def get_almanac_years():
-    """Every year that has at least one dated thing in the archive."""
-    db = get_db()
-    years = set()
-    for table, col in [
-        ("video_entries", "date_recorded"),
-        ("contributions", "created_at"),
-        ("time_capsules", "unlock_date"),
-        ("people", "created_at"),
-    ]:
-        rows = db.execute(f"SELECT DISTINCT substr({col}, 1, 4) AS y FROM {table}").fetchall()
-        years.update(int(r["y"]) for r in rows if r["y"])
-    return sorted(years, reverse=True)
-
-
-@app.route("/almanac")
-def almanac_redirect():
-    years = get_almanac_years()
-    target_year = years[0] if years else date.today().year
-    return redirect(url_for("almanac", year=target_year))
-
-
-@app.route("/almanac/<int:year>")
-def almanac(year):
-    db = get_db()
-    year_str = f"{year:04d}"
-
-    videos = db.execute(
-        ENTRY_QUERY + " WHERE substr(video_entries.date_recorded, 1, 4) = ?"
-        " ORDER BY video_entries.date_recorded",
-        (year_str,),
-    ).fetchall()
-
-    entries = db.execute(
-        CONTRIBUTION_QUERY + " WHERE substr(contributions.created_at, 1, 4) = ?"
-        " ORDER BY contributions.created_at",
-        (year_str,),
-    ).fetchall()
-
-    capsule_rows = db.execute(
-        CAPSULE_QUERY + " WHERE substr(time_capsules.unlock_date, 1, 4) = ?"
-        " ORDER BY time_capsules.unlock_date",
-        (year_str,),
-    ).fetchall()
-    unlocked_capsules = [c for c in capsule_rows if is_unlocked(c["unlock_date"])]
-
-    new_people = db.execute(
-        "SELECT * FROM people WHERE substr(created_at, 1, 4) = ? ORDER BY created_at",
-        (year_str,),
-    ).fetchall()
-
-    years = get_almanac_years()
-    if year not in years:
-        years = sorted(years + [year], reverse=True)
-    idx = years.index(year)
-    newer_year = years[idx - 1] if idx > 0 else None
-    older_year = years[idx + 1] if idx + 1 < len(years) else None
-
-    return render_template(
-        "almanac.html",
-        year=year,
-        videos=videos,
-        contributions=entries,
-        capsules=unlocked_capsules,
-        new_people=new_people,
-        years=years,
-        newer_year=newer_year,
-        older_year=older_year,
-        kind_labels=CONTRIBUTION_KIND_LABELS,
-    )
 
 
 if not DATABASE.exists():

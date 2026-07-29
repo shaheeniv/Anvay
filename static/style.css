@@ -834,34 +834,11 @@ h2 {
   line-height: 1.7;
 }
 
-/* Almanac */
+/* Print view (currently unused directly, but kept for the Legacy Book's
+   planned print/export view, which will reuse this same pattern) */
 
 .print-only {
   display: none;
-}
-
-.almanac-year-nav {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.almanac-year-nav a {
-  text-decoration: none;
-  color: var(--brown-dark);
-  font-weight: bold;
-}
-
-.almanac-year-nav a.disabled {
-  color: var(--line);
-  pointer-events: none;
-}
-
-.almanac-current-year {
-  font-size: 1.3rem;
-  font-weight: bold;
-  color: var(--navy);
 }
 
 /* Dashboard */
