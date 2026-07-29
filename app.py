@@ -209,15 +209,34 @@ def home():
 @app.route("/dashboard")
 def dashboard():
     db = get_db()
+    visible_ids = current_visible_person_ids()
+    contrib_ids = visible_contribution_ids(visible_ids)
+    capsule_ids = visible_capsule_ids(visible_ids)
+
+    people_count = (
+        db.execute("SELECT COUNT(*) AS c FROM people").fetchone()["c"]
+        if visible_ids is None else len(visible_ids)
+    )
+    videos_count = (
+        db.execute("SELECT COUNT(*) AS c FROM video_entries").fetchone()["c"]
+        if visible_ids is None else
+        sum(1 for r in db.execute("SELECT person_id FROM video_entries") if r["person_id"] in visible_ids)
+    )
+    contributions_count = (
+        db.execute("SELECT COUNT(*) AS c FROM contributions").fetchone()["c"]
+        if visible_ids is None else len(contrib_ids)
+    )
 
     stats = {
-        "people": db.execute("SELECT COUNT(*) AS c FROM people").fetchone()["c"],
-        "videos": db.execute("SELECT COUNT(*) AS c FROM video_entries").fetchone()["c"],
-        "contributions": db.execute("SELECT COUNT(*) AS c FROM contributions").fetchone()["c"],
+        "people": people_count,
+        "videos": videos_count,
+        "contributions": contributions_count,
         "capsules_sealed": 0,
         "capsules_unlocked": 0,
     }
-    for row in db.execute("SELECT unlock_date FROM time_capsules"):
+    for row in db.execute("SELECT id, unlock_date FROM time_capsules"):
+        if visible_ids is not None and row["id"] not in capsule_ids:
+            continue
         if is_unlocked(row["unlock_date"]):
             stats["capsules_unlocked"] += 1
         else:
@@ -228,12 +247,14 @@ def dashboard():
     for row in db.execute(
         """
         SELECT video_entries.id, video_entries.topic, video_entries.created_at,
-               people.name AS person_name
+               video_entries.person_id, people.name AS person_name
         FROM video_entries
         JOIN people ON people.id = video_entries.person_id
         ORDER BY video_entries.created_at DESC LIMIT 8
         """
     ):
+        if visible_ids is not None and row["person_id"] not in visible_ids:
+            continue
         activity.append({
             "created_at": row["created_at"],
             "badge_label": "Video",
@@ -245,6 +266,8 @@ def dashboard():
     for row in db.execute(
         "SELECT id, kind, title, created_at FROM contributions ORDER BY created_at DESC LIMIT 8"
     ):
+        if visible_ids is not None and row["id"] not in contrib_ids:
+            continue
         activity.append({
             "created_at": row["created_at"],
             "badge_label": CONTRIBUTION_KIND_LABELS[row["kind"]],
@@ -262,6 +285,8 @@ def dashboard():
         ORDER BY time_capsules.created_at DESC LIMIT 8
         """
     ):
+        if visible_ids is not None and row["id"] not in capsule_ids:
+            continue
         unlocked = is_unlocked(row["unlock_date"])
         activity.append({
             "created_at": row["created_at"],
@@ -272,6 +297,8 @@ def dashboard():
         })
 
     for row in db.execute("SELECT id, name, created_at FROM people ORDER BY created_at DESC LIMIT 8"):
+        if visible_ids is not None and row["id"] not in visible_ids:
+            continue
         activity.append({
             "created_at": row["created_at"],
             "badge_label": "New person",
@@ -283,15 +310,21 @@ def dashboard():
     activity.sort(key=lambda a: a["created_at"], reverse=True)
     activity = activity[:12]
 
-    recent_photos = db.execute(
-        """
-        SELECT id, title, photo_filename FROM contributions
-        WHERE kind = 'photo' AND photo_filename IS NOT NULL
-        ORDER BY created_at DESC LIMIT 6
-        """
-    ).fetchall()
+    recent_photos = [
+        row for row in db.execute(
+            """
+            SELECT id, title, photo_filename FROM contributions
+            WHERE kind = 'photo' AND photo_filename IS NOT NULL
+            ORDER BY created_at DESC LIMIT 12
+            """
+        )
+        if visible_ids is None or row["id"] in contrib_ids
+    ][:6]
 
     family_roots, _, _ = build_family_forest()
+    if visible_ids is not None:
+        allowed_roots = get_branch_membership().get(session["person_id"], set())
+        family_roots = [r for r in family_roots if r["id"] in allowed_roots]
 
     return render_template(
         "dashboard.html", stats=stats, activity=activity, recent_photos=recent_photos,
@@ -331,13 +364,17 @@ def stories():
         entries = db.execute(
             ENTRY_QUERY + " ORDER BY video_entries.date_recorded DESC, video_entries.id DESC"
         ).fetchall()
+
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None:
+        entries = [e for e in entries if e["person_id"] in visible_ids]
+
     return render_template("stories.html", entries=entries, q=q)
 
 
 @app.route("/entries/new")
 def new_entry():
-    db = get_db()
-    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    people = visible_people()
     preselect_person_id = request.args.get("person_id", type=int)
     return render_template("form.html", entry=None, people=people, preselect_person_id=preselect_person_id)
 
@@ -370,6 +407,9 @@ def show_entry(entry_id):
     entry = db.execute(ENTRY_QUERY + " WHERE video_entries.id = ?", (entry_id,)).fetchone()
     if entry is None:
         return "Entry not found", 404
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None and entry["person_id"] not in visible_ids:
+        return "Entry not found", 404
     return render_template("entry.html", entry=entry)
 
 
@@ -379,7 +419,7 @@ def edit_entry(entry_id):
     entry = db.execute(ENTRY_QUERY + " WHERE video_entries.id = ?", (entry_id,)).fetchone()
     if entry is None:
         return "Entry not found", 404
-    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    people = visible_people()
     return render_template("form.html", entry=entry, people=people, preselect_person_id=None)
 
 
@@ -511,6 +551,9 @@ def show_person(person_id):
     person = db.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
     if person is None:
         return "Person not found", 404
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None and person_id not in visible_ids:
+        return "Person not found", 404
 
     parents = db.execute(
         """
@@ -546,9 +589,7 @@ def show_person(person_id):
         "SELECT * FROM video_entries WHERE person_id = ? ORDER BY date_recorded DESC",
         (person_id,),
     ).fetchall()
-    all_people = db.execute(
-        "SELECT * FROM people WHERE id != ? ORDER BY name", (person_id,)
-    ).fetchall()
+    all_people = visible_people(exclude_id=person_id)
     contributions = db.execute(
         """
         SELECT DISTINCT contributions.*, people.name AS author_name
@@ -904,11 +945,117 @@ def classify_relationship(subject_ids, viewer_id):
     return "any"
 
 
+def get_branch_membership():
+    """Maps person_id -> set of family-tree root_ids whose rendered branch
+    includes them. Deliberately reuses build_family_forest()'s own render
+    of each branch (not raw graph connectivity) — a distant in-law chain
+    (e.g. your daughter's husband's father) can connect two branches in
+    the raw parent_child/spouses graph without either side actually
+    belonging to the other's branch. build_family_forest() already draws
+    that line correctly (spouses attach as leaves, not as a bridge into
+    their own separate branch), so membership here matches exactly what
+    someone sees when they open a given branch on the Family Tree page."""
+    roots_meta, trees_by_root, _ = build_family_forest()
+    membership = defaultdict(set)
+
+    def walk(node, root_id):
+        membership[node["person"]["id"]].add(root_id)
+        for spouse in node["spouses"]:
+            membership[spouse["id"]].add(root_id)
+        for child in node["children"]:
+            walk(child, root_id)
+
+    for root in roots_meta:
+        walk(trees_by_root[root["id"]], root["id"])
+    return membership
+
+
+def get_visible_person_ids(viewer_id):
+    """Every person_id who shares at least one family-tree branch with
+    viewer_id — i.e. everyone viewer_id is allowed to see. A person with
+    no recorded relationships at all can only see themselves."""
+    membership = get_branch_membership()
+    viewer_branches = membership.get(viewer_id, set())
+    if not viewer_branches:
+        return {viewer_id}
+    return {
+        pid for pid, branches in membership.items()
+        if branches & viewer_branches
+    }
+
+
+def current_visible_person_ids():
+    """Per-request cached accessor. Returns None for admins (meaning: no
+    restriction, see everyone) — every other route treats None as
+    'skip filtering'."""
+    if "visible_ids" not in g:
+        person = current_person()
+        if person is None:
+            g.visible_ids = set()
+        elif person["is_admin"]:
+            g.visible_ids = None
+        else:
+            g.visible_ids = get_visible_person_ids(person["id"])
+    return g.visible_ids
+
+
+def visible_contribution_ids(visible_ids):
+    """Contribution ids where the author or at least one tagged person is
+    visible. None input (admin) means no restriction — returns None."""
+    if visible_ids is None:
+        return None
+    db = get_db()
+    ids = set()
+    for row in db.execute("SELECT id, author_id FROM contributions"):
+        if row["author_id"] in visible_ids:
+            ids.add(row["id"])
+    for row in db.execute("SELECT contribution_id, person_id FROM contribution_people"):
+        if row["person_id"] in visible_ids:
+            ids.add(row["contribution_id"])
+    return ids
+
+
+def visible_capsule_ids(visible_ids):
+    """Time capsule ids where the recipient or author is visible. None
+    input (admin) means no restriction — returns None."""
+    if visible_ids is None:
+        return None
+    db = get_db()
+    ids = set()
+    for row in db.execute("SELECT id, recipient_id, author_id FROM time_capsules"):
+        if row["recipient_id"] in visible_ids or row["author_id"] in visible_ids:
+            ids.add(row["id"])
+    return ids
+
+
+def visible_people(exclude_id=None):
+    """People visible to the current viewer, sorted by name — used for
+    person-picker dropdowns (adding a relation, tagging a contribution,
+    etc.) so a non-admin can't see or tag someone from a family branch
+    they don't belong to."""
+    db = get_db()
+    rows = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None:
+        rows = [r for r in rows if r["id"] in visible_ids]
+    if exclude_id is not None:
+        rows = [r for r in rows if r["id"] != exclude_id]
+    return rows
+
+
 @app.route("/tree")
 def tree():
     roots_meta, trees_by_root, unattached = build_family_forest()
+
+    person = current_person()
+    if not (person and person["is_admin"]):
+        allowed_roots = get_branch_membership().get(session["person_id"], set())
+        roots_meta = [r for r in roots_meta if r["id"] in allowed_roots]
+        visible_ids = current_visible_person_ids()
+        unattached = [p for p in unattached if p["id"] in visible_ids]
+
     selected_root = request.args.get("root", type=int)
-    if selected_root not in trees_by_root:
+    if selected_root not in {r["id"] for r in roots_meta}:
         selected_root = roots_meta[0]["id"] if roots_meta else None
     return render_template(
         "tree.html",
@@ -978,6 +1125,12 @@ def feed():
         params = (kind,)
     query += " ORDER BY contributions.created_at DESC, contributions.id DESC"
     contributions = db.execute(query, params).fetchall()
+
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None:
+        allowed = visible_contribution_ids(visible_ids)
+        contributions = [c for c in contributions if c["id"] in allowed]
+
     return render_template(
         "feed.html", contributions=contributions, kinds=CONTRIBUTION_KINDS,
         kind_labels=CONTRIBUTION_KIND_LABELS, active_kind=kind,
@@ -986,8 +1139,7 @@ def feed():
 
 @app.route("/feed/new")
 def new_contribution():
-    db = get_db()
-    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    people = visible_people()
     person_id = request.args.get("person_id", type=int)
     linked_ids = {person_id} if person_id else set()
     return render_template(
@@ -1028,6 +1180,9 @@ def show_contribution(contribution_id):
     ).fetchone()
     if contribution is None:
         return "Entry not found", 404
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None and contribution_id not in visible_contribution_ids(visible_ids):
+        return "Entry not found", 404
     linked_people = get_linked_people(contribution_id)
     return render_template(
         "contribution.html", contribution=contribution, linked_people=linked_people,
@@ -1043,7 +1198,7 @@ def edit_contribution(contribution_id):
     ).fetchone()
     if contribution is None:
         return "Entry not found", 404
-    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    people = visible_people()
     linked_ids = {p["id"] for p in get_linked_people(contribution_id)}
     return render_template(
         "contribution_form.html", contribution=contribution, people=people,
@@ -1135,6 +1290,12 @@ def describe_time_until(unlock_date_str):
 def capsules():
     db = get_db()
     rows = db.execute(CAPSULE_QUERY + " ORDER BY time_capsules.unlock_date").fetchall()
+
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None:
+        allowed = visible_capsule_ids(visible_ids)
+        rows = [r for r in rows if r["id"] in allowed]
+
     sealed = [r for r in rows if not is_unlocked(r["unlock_date"])]
     unlocked = sorted(
         (r for r in rows if is_unlocked(r["unlock_date"])),
@@ -1148,8 +1309,7 @@ def capsules():
 
 @app.route("/capsules/new")
 def new_capsule():
-    db = get_db()
-    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    people = visible_people()
     return render_template(
         "capsule_form.html", capsule=None, people=people,
         preselect_recipient_id=request.args.get("person_id", type=int),
@@ -1182,6 +1342,9 @@ def show_capsule(capsule_id):
     capsule = db.execute(CAPSULE_QUERY + " WHERE time_capsules.id = ?", (capsule_id,)).fetchone()
     if capsule is None:
         return "Letter not found", 404
+    visible_ids = current_visible_person_ids()
+    if visible_ids is not None and capsule_id not in visible_capsule_ids(visible_ids):
+        return "Letter not found", 404
     unlocked = is_unlocked(capsule["unlock_date"])
     return render_template(
         "capsule.html", capsule=capsule, unlocked=unlocked,
@@ -1198,7 +1361,7 @@ def edit_capsule(capsule_id):
     if not is_unlocked(capsule["unlock_date"]):
         flash("This letter is sealed and can't be edited until it unlocks — delete and rewrite it if you need to change something.")
         return redirect(url_for("show_capsule", capsule_id=capsule_id))
-    people = db.execute("SELECT * FROM people ORDER BY name").fetchall()
+    people = visible_people()
     return render_template(
         "capsule_form.html", capsule=capsule, people=people, preselect_recipient_id=None
     )

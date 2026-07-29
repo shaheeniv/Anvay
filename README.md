@@ -155,6 +155,18 @@ branch). Without a name set, a branch just falls back to showing the
 root couple's names. These names are also what the homepage's family
 box uses.
 
+**Who can see which branch:** everyone only sees the branch(es) they
+actually belong to — by blood or by marriage to someone in that
+branch. This applies everywhere, not just the tree: Videos,
+Contributions, Time Capsules, and person profile pages all quietly
+hide anyone from a branch you're not part of, and person-picker
+dropdowns (adding a relation, tagging a contribution, etc.) only list
+people you're allowed to see. Marrying into a branch adds it to your
+list — it doesn't merge branches together, so a distant in-law
+connection (e.g. your child's spouse's parents) doesn't itself grant
+you access, only a direct link does. Admin accounts always see
+everything, regardless of branch.
+
 Each person's profile lists any story/video entries linked to them
 (with a shortcut to log a new one), and now also has room for a
 surname, where they were born, and three words to describe them —
