@@ -980,26 +980,46 @@ def get_branch_membership():
     return membership
 
 
+def get_solo_person_ids():
+    """People who are the sole member of their own family-tree branch —
+    no recorded parent, child, or spouse yet (build_family_forest() makes
+    every such person the root of a one-person branch of their own, they
+    don't show up in its "unattached" list). Treated as visible to
+    everyone rather than hidden: a freshly-added standalone person isn't
+    "in the wrong branch," they just aren't in anyone's branch yet.
+    Otherwise, adding a new person and being redirected straight to their
+    own profile page would 404 for whoever just added them."""
+    roots_meta, trees_by_root, _ = build_family_forest()
+    return {
+        root["id"] for root in roots_meta
+        if not trees_by_root[root["id"]]["children"]
+        and not trees_by_root[root["id"]]["spouses"]
+    }
+
+
 def get_visible_person_ids(seed_ids):
     """Every person_id who shares at least one family-tree branch with
     any of seed_ids — e.g. everyone a given viewer is allowed to see, or
     everyone belonging to a Legacy Book's own subject(s). Accepts a
-    single person_id or an iterable of them (a couple, say). Seeds with
-    no recorded relationships at all just see themselves."""
+    single person_id or an iterable of them (a couple, say)."""
     if isinstance(seed_ids, int):
         seed_ids = {seed_ids}
     else:
         seed_ids = set(seed_ids)
     membership = get_branch_membership()
+    solo_ids = get_solo_person_ids()
+
     seed_branches = set()
     for pid in seed_ids:
         seed_branches |= membership.get(pid, set())
     if not seed_branches:
-        return seed_ids
-    return {
+        return seed_ids | solo_ids
+
+    visible = {
         pid for pid, branches in membership.items()
         if branches & seed_branches
     }
+    return visible | solo_ids | seed_ids
 
 
 def current_visible_person_ids():
