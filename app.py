@@ -389,6 +389,35 @@ def start_transcription(entry_id, video_filename):
     thread.start()
 
 
+def ensure_gujarati_script(text):
+    """OpenAI's transcription models sometimes correctly hear Gujarati
+    speech — right words, right grammar — but write it out using
+    Devanagari (Hindi's script) or Gurmukhi (Punjabi's script) instead of
+    Gujarati's own script, presumably because those are more common in
+    training data. Since Gujarati script is a direct derivative of
+    Devanagari (shared character-for-character, just different
+    letterforms and no headline), this is a mechanical, reliable fix —
+    detect which script actually dominates the text and transliterate it
+    to Gujarati if it's not already."""
+    from indic_transliteration import sanscript
+
+    counts = {"devanagari": 0, "gujarati": 0, "gurmukhi": 0}
+    for ch in text:
+        codepoint = ord(ch)
+        if 0x0900 <= codepoint <= 0x097F:
+            counts["devanagari"] += 1
+        elif 0x0A80 <= codepoint <= 0x0AFF:
+            counts["gujarati"] += 1
+        elif 0x0A00 <= codepoint <= 0x0A7F:
+            counts["gurmukhi"] += 1
+
+    dominant = max(counts, key=counts.get)
+    if counts[dominant] == 0 or dominant == "gujarati":
+        return text
+    source_script = sanscript.DEVANAGARI if dominant == "devanagari" else sanscript.GURMUKHI
+    return sanscript.transliterate(text, source_script, sanscript.GUJARATI)
+
+
 def transcribe_video_entry(entry_id, video_path):
     """Runs in a background thread. Extracts a small compressed audio
     track (Whisper's API caps uploads at 25MB — the full video is a
@@ -433,7 +462,7 @@ def transcribe_video_entry(entry_id, video_path):
             transcription = client.audio.transcriptions.create(
                 model="gpt-4o-transcribe", file=f, language="gu"
             )
-        gujarati_text = transcription.text
+        gujarati_text = ensure_gujarati_script(transcription.text)
 
         translation_response = client.chat.completions.create(
             model="gpt-4o",
