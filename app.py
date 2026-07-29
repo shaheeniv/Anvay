@@ -903,6 +903,16 @@ def build_family_forest():
     return roots_meta, trees_by_root, unattached
 
 
+def get_book_subject_ids(book_id):
+    db = get_db()
+    return [
+        row["person_id"]
+        for row in db.execute(
+            "SELECT person_id FROM book_subjects WHERE book_project_id = ?", (book_id,)
+        )
+    ]
+
+
 def classify_relationship(subject_ids, viewer_id):
     """Classify viewer_id's relationship to a Legacy Book's subject(s) (one
     person or a couple), for picking which question set they see:
@@ -970,17 +980,25 @@ def get_branch_membership():
     return membership
 
 
-def get_visible_person_ids(viewer_id):
+def get_visible_person_ids(seed_ids):
     """Every person_id who shares at least one family-tree branch with
-    viewer_id — i.e. everyone viewer_id is allowed to see. A person with
-    no recorded relationships at all can only see themselves."""
+    any of seed_ids — e.g. everyone a given viewer is allowed to see, or
+    everyone belonging to a Legacy Book's own subject(s). Accepts a
+    single person_id or an iterable of them (a couple, say). Seeds with
+    no recorded relationships at all just see themselves."""
+    if isinstance(seed_ids, int):
+        seed_ids = {seed_ids}
+    else:
+        seed_ids = set(seed_ids)
     membership = get_branch_membership()
-    viewer_branches = membership.get(viewer_id, set())
-    if not viewer_branches:
-        return {viewer_id}
+    seed_branches = set()
+    for pid in seed_ids:
+        seed_branches |= membership.get(pid, set())
+    if not seed_branches:
+        return seed_ids
     return {
         pid for pid, branches in membership.items()
-        if branches & viewer_branches
+        if branches & seed_branches
     }
 
 
@@ -1589,9 +1607,12 @@ def book_photos(book_id):
     ).fetchall()
     tagged_by_photo = {photo["id"]: get_book_photo_people(photo["id"]) for photo in photos}
 
+    book_family_ids = get_visible_person_ids(get_book_subject_ids(book_id))
+    people = [p for p in db.execute("SELECT * FROM people ORDER BY name") if p["id"] in book_family_ids]
+
     return render_template(
         "book_photos.html", book=book, photos=photos, tagged_by_photo=tagged_by_photo,
-        people=visible_people(),
+        people=people,
     )
 
 
