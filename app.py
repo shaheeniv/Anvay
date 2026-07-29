@@ -424,12 +424,15 @@ def transcribe_video_entry(entry_id, video_path):
             )
 
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-        # No language hint — OpenAI's API only accepts a specific
-        # allowlist of codes for that parameter and Gujarati isn't on it,
-        # even though the model itself recognizes Gujarati fine via
-        # automatic language detection when the hint is simply omitted.
+        # whisper-1 flatly rejected language="gu" (not on its allowlist),
+        # but gpt-4o-transcribe is a different backend — try the hint
+        # here too, since without it, auto-detection keeps landing on a
+        # phonetically-similar language (Punjabi, then Hindi) and
+        # transcribing in that language's script instead of Gujarati's.
         with open(audio_path, "rb") as f:
-            transcription = client.audio.transcriptions.create(model="gpt-4o-transcribe", file=f)
+            transcription = client.audio.transcriptions.create(
+                model="gpt-4o-transcribe", file=f, language="gu"
+            )
         gujarati_text = transcription.text
 
         translation_response = client.chat.completions.create(
