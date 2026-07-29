@@ -20,14 +20,12 @@
 
   <form class="entry-form" method="post" action="{{ url_for('edit_book_questions', book_id=book['id']) }}">
     {% for relationship, group in questions | groupby('target_relationship') %}
-      <section class="relation-section">
-        <h2>{{ relationship_labels.get(relationship, relationship) }}</h2>
-        {% for question in group %}
-          <label for="question_{{ question['id'] }}">Question {{ loop.index }}</label>
-          <textarea id="question_{{ question['id'] }}" name="question_{{ question['id'] }}" rows="2"
-            >{{ question['text'] }}</textarea>
-        {% endfor %}
-      </section>
+      <h2>{{ relationship_labels.get(relationship, relationship) }}</h2>
+      {% for question in group %}
+        <label for="question_{{ question['id'] }}">Question {{ loop.index }}</label>
+        <textarea id="question_{{ question['id'] }}" name="question_{{ question['id'] }}" rows="3"
+          >{{ question['text'] }}</textarea>
+      {% endfor %}
     {% endfor %}
 
     <div class="form-actions">

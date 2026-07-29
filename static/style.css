@@ -326,6 +326,12 @@ h2 {
   font-size: 0.95rem;
 }
 
+.entry-form h2:not(:first-child) {
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
 .entry-form .hint {
   font-weight: normal;
   color: var(--muted);
