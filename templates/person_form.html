@@ -15,6 +15,22 @@
     {% if as_parent_of %}<input type="hidden" name="as_parent_of" value="{{ as_parent_of }}">{% endif %}
     {% if as_spouse_of %}<input type="hidden" name="as_spouse_of" value="{{ as_spouse_of }}">{% endif %}
 
+    {% if not person and not as_child_of and not as_parent_of and not as_spouse_of and people %}
+      <label for="relation_type">How are they connected to the family? <span class="hint">(required — every new person needs to link to someone already in the tree)</span></label>
+      <select id="relation_type" name="relation_type" required>
+        <option value="">— choose —</option>
+        <option value="new_is_child">The new person is their child</option>
+        <option value="new_is_parent">The new person is their parent</option>
+        <option value="new_is_spouse">The new person is their spouse / partner</option>
+      </select>
+
+      <label for="relation_person_id">Existing family member</label>
+      <select id="relation_person_id" name="relation_person_id" required>
+        <option value="">— choose a person —</option>
+        {% for p in people %}<option value="{{ p['id'] }}">{{ p['name'] }}</option>{% endfor %}
+      </select>
+    {% endif %}
+
     <label for="name">Name</label>
     <input type="text" id="name" name="name" required
       placeholder="However they're known in the family — e.g. Dada, Ba, Mum, Raj…"

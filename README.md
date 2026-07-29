@@ -133,10 +133,16 @@ tree diagram — couples shown together with a connecting line down to
 their children, generation by generation. Unlike other pages, this
 one uses the full width of your window rather than a narrow reading
 column, since a wide family spreads out horizontally. Click "+ Add a
-person" to add someone standalone, or go to an existing person's
-profile page to add their parents, spouse, or children directly — you
-can either link to someone already in the tree or type a new name to
+person" to add someone new, or go to an existing person's profile
+page to add their parents, spouse, or children directly — either way
+you can link to someone already in the tree or type a new name to
 create them on the spot.
+
+Every new person has to be connected to someone already in the tree —
+their child, parent, or spouse/partner — so nobody ends up added by
+mistake with no link to the rest of the family. The only exception is
+the very first person ever added to an empty tree, since there's
+nobody to connect them to yet.
 
 If the family has more than one distinct branch with no common
 ancestor recorded (e.g. your mum's side and your dad's side, before

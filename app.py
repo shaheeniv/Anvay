@@ -503,12 +503,30 @@ def new_person():
         as_child_of=request.args.get("as_child_of", type=int),
         as_parent_of=request.args.get("as_parent_of", type=int),
         as_spouse_of=request.args.get("as_spouse_of", type=int),
+        people=visible_people(),
     )
 
 
 @app.route("/people", methods=["POST"])
 def create_person():
     db = get_db()
+
+    as_child_of = request.form.get("as_child_of", type=int)
+    as_parent_of = request.form.get("as_parent_of", type=int)
+    as_spouse_of = request.form.get("as_spouse_of", type=int)
+    relation_type = request.form.get("relation_type", "").strip()
+    relation_person_id = request.form.get("relation_person_id", type=int)
+    has_relation = as_child_of or as_parent_of or as_spouse_of or (relation_type and relation_person_id)
+
+    # Every new person must be connected to someone already in the tree
+    # (parent, child, or spouse) — a standalone, unconnected person isn't
+    # allowed, except for the very first person ever added (nothing to
+    # connect to yet).
+    already_has_people = db.execute("SELECT 1 FROM people LIMIT 1").fetchone() is not None
+    if not has_relation and already_has_people:
+        flash("New people need to be connected to an existing family member — pick a parent, child, or spouse below.")
+        return redirect(url_for("new_person"))
+
     cur = db.execute(
         """
         INSERT INTO people (name, surname, birth_date, birth_place, three_words, notes, family_name, family_id)
@@ -528,10 +546,6 @@ def create_person():
     new_id = cur.lastrowid
     db.commit()
 
-    as_child_of = request.form.get("as_child_of", type=int)
-    as_parent_of = request.form.get("as_parent_of", type=int)
-    as_spouse_of = request.form.get("as_spouse_of", type=int)
-
     if as_child_of:
         add_relationship(as_child_of, "child", new_id, None)
         return redirect(url_for("show_person", person_id=as_child_of))
@@ -541,6 +555,14 @@ def create_person():
     if as_spouse_of:
         add_relationship(as_spouse_of, "spouse", new_id, None)
         return redirect(url_for("show_person", person_id=as_spouse_of))
+    if relation_type and relation_person_id:
+        # add_relationship's own convention is "existing_id becomes
+        # person_id's <relation>" — e.g. relation="child" means
+        # existing_id becomes new_id's child. The form is phrased the
+        # other way round (from the new person's perspective, which
+        # reads far less ambiguously), so translate here.
+        relation_map = {"new_is_child": "parent", "new_is_parent": "child", "new_is_spouse": "spouse"}
+        add_relationship(new_id, relation_map[relation_type], relation_person_id, None)
 
     return redirect(url_for("show_person", person_id=new_id))
 
