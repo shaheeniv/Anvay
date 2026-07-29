@@ -392,13 +392,16 @@ def start_transcription(entry_id, video_filename):
 def transcribe_video_entry(entry_id, video_path):
     """Runs in a background thread. Extracts a small compressed audio
     track (Whisper's API caps uploads at 25MB — the full video is a
-    separate, much larger file that's never sent to Whisper directly),
-    then calls OpenAI's Whisper API twice: once for the Gujarati
-    transcript, once for the English translation (Whisper only returns
-    one language per call, so there's no way to get both from a single
-    request). Uses its own sqlite3 connection since this runs outside
-    any Flask request context, so Flask's g-based get_db() isn't
-    available here."""
+    separate, much larger file that's never sent to the API directly),
+    transcribes it with gpt-4o-transcribe (OpenAI's newer, more accurate
+    model — noticeably better than whisper-1 on lower-resource languages
+    like Gujarati), then translates that *text* to English with a chat
+    model. Deliberately not using Whisper's separate audio-to-English
+    /translations endpoint for this — that's an independent pass over
+    the same (possibly noisy) audio and can drift from the Gujarati
+    transcript rather than being grounded in it. Uses its own sqlite3
+    connection since this runs outside any Flask request context, so
+    Flask's g-based get_db() isn't available here."""
     from openai import OpenAI
     import imageio_ffmpeg
 
@@ -411,29 +414,43 @@ def transcribe_video_entry(entry_id, video_path):
 
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
         subprocess.run(
-            [ffmpeg_exe, "-y", "-i", str(video_path), "-vn", "-ac", "1", "-b:a", "64k", str(audio_path)],
+            [ffmpeg_exe, "-y", "-i", str(video_path), "-vn", "-ac", "1", "-b:a", "128k", str(audio_path)],
             check=True, capture_output=True,
         )
         if audio_path.stat().st_size > WHISPER_MAX_AUDIO_BYTES:
             raise ValueError(
                 "This video's audio track is too long to transcribe automatically "
-                "(over Whisper's 25MB limit even after compression) — add the transcript by hand instead."
+                "(over the API's 25MB limit even after compression) — add the transcript by hand instead."
             )
 
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-        # No language hint here — OpenAI's API only accepts a specific
+        # No language hint — OpenAI's API only accepts a specific
         # allowlist of codes for that parameter and Gujarati isn't on it,
         # even though the model itself recognizes Gujarati fine via
         # automatic language detection when the hint is simply omitted.
         with open(audio_path, "rb") as f:
-            gujarati = client.audio.transcriptions.create(model="whisper-1", file=f)
-        with open(audio_path, "rb") as f:
-            english = client.audio.translations.create(model="whisper-1", file=f)
+            transcription = client.audio.transcriptions.create(model="gpt-4o-transcribe", file=f)
+        gujarati_text = transcription.text
+
+        translation_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You translate Gujarati to English for a family archive. "
+                        "Respond with only the English translation — no notes, no commentary."
+                    ),
+                },
+                {"role": "user", "content": gujarati_text},
+            ],
+        )
+        english_text = translation_response.choices[0].message.content
 
         db.execute(
             "UPDATE video_entries SET gujarati_transcript = ?, english_translation = ?,"
             " transcription_status = 'done', transcription_error = NULL WHERE id = ?",
-            (gujarati.text, english.text, entry_id),
+            (gujarati_text, english_text, entry_id),
         )
         db.commit()
     except Exception as e:
