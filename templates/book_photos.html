@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Photos — {{ book['title'] }} — Anvay{% endblock %}
+{% block nav_section %}book{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <div>
+      <h1>Photos</h1>
+      <p class="entry-meta">for {{ book['title'] }}</p>
+    </div>
+    <a class="button" href="{{ url_for('show_book', book_id=book['id']) }}">&larr; Back to {{ book['title'] }}</a>
+  </div>
+
+  <p class="hint">
+    Photos added here are kept with this Legacy Book specifically, so they
+    can be used when it's compiled — add a short description and tag
+    whoever's in the photo.
+  </p>
+
+  {% if people %}
+  <form
+    class="entry-form"
+    method="post"
+    enctype="multipart/form-data"
+    action="{{ url_for('create_book_photo', book_id=book['id']) }}"
+  >
+    <label for="photo">Photo</label>
+    <input type="file" id="photo" name="photo" accept="image/png,image/jpeg,image/gif,image/webp" required>
+
+    <label for="caption">Description <span class="hint">(optional)</span></label>
+    <textarea id="caption" name="caption" rows="3" placeholder="Where/when this was taken, what's happening…"></textarea>
+
+    <label>Who's in this photo? <span class="hint">(optional)</span></label>
+    <div class="checkbox-list">
+      {% for person in people %}
+        <label class="checkbox-item">
+          <input type="checkbox" name="person_ids" value="{{ person['id'] }}">
+          {{ person['name'] }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="button">Add photo</button>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if photos %}
+    <ul class="book-photo-gallery">
+      {% for photo in photos %}
+        <li class="book-photo-card">
+          <img src="{{ url_for('uploaded_file', filename=photo['photo_filename']) }}" alt="{{ photo['caption'] or '' }}">
+          <div class="book-photo-info">
+            {% if photo['caption'] %}
+              <p class="book-photo-caption">{{ photo['caption'] }}</p>
+            {% endif %}
+            {% if tagged_by_photo[photo['id']] %}
+              <p class="book-photo-meta">{{ tagged_by_photo[photo['id']] | map(attribute='name') | join(', ') }}</p>
+            {% endif %}
+            <p class="book-photo-meta">{{ photo['created_at'][:10] }}{% if photo['uploaded_by_name'] %} · {{ photo['uploaded_by_name'] }}{% endif %}</p>
+            <form method="post" action="{{ url_for('delete_book_photo', book_id=book['id'], photo_id=photo['id']) }}"
+              onsubmit="return confirm('Remove this photo?');">
+              <button type="submit" class="danger-link">Remove</button>
+            </form>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty-state">No photos added yet.</p>
+  {% endif %}
+
+{% endblock %}

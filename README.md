@@ -228,6 +228,12 @@ a set about joining the family, grandchildren and great-grandchildren get
 shorter, more personal sets, and anyone else gets a small general set.
 Answers save per-person and can be revisited/edited any time.
 
+Each book also has its own **Photos** page ("View & add photos" from the
+book's page) — anyone can upload a photo, add a short description, and
+tag who's in it. These are kept separate from the main Contributions
+feed, since they're specifically meant to be sourced when this book is
+eventually compiled, alongside the interviews and written answers.
+
 What's built so far is just the data-collection side — gathering the
 interviews and everyone's answers in one place. Turning all of that into
 an actual compiled, readable book (using AI to weave the video interviews

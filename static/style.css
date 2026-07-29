@@ -784,6 +784,48 @@ h2 {
   margin-top: 0.15rem;
 }
 
+/* Legacy Book photos */
+
+.book-photo-gallery {
+  list-style: none;
+  margin: 0 0 2rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.book-photo-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--paper);
+  box-shadow: var(--shadow-card);
+}
+
+.book-photo-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+
+.book-photo-info {
+  padding: 0.85rem 1rem 1rem;
+}
+
+.book-photo-caption {
+  margin: 0 0 0.4rem;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+.book-photo-meta {
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .contribution-photo img {
   max-width: 100%;
   border-radius: 8px;

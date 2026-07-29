@@ -14,6 +14,15 @@
   </div>
 
   <section class="relation-section">
+    <h2>Photos</h2>
+    <p class="hint">
+      {{ photo_count }} photo{{ 's' if photo_count != 1 else '' }} added so far —
+      these can be used when this book is compiled.
+    </p>
+    <a class="small-link" href="{{ url_for('book_photos', book_id=book['id']) }}">View &amp; add photos &rarr;</a>
+  </section>
+
+  <section class="relation-section">
     <h2>Their own interviews</h2>
     {% if entries %}
       <ul class="entry-list">

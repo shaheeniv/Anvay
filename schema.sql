@@ -143,6 +143,24 @@ CREATE TABLE IF NOT EXISTS book_answers (
     UNIQUE(book_project_id, question_id, person_id)
 );
 
+-- Photos contributed toward a specific Legacy Book — separate from the
+-- family-wide contribution feed, since these are meant to be sourced
+-- for that book's eventual compilation, tagged to whoever's in them.
+CREATE TABLE IF NOT EXISTS book_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_project_id INTEGER NOT NULL REFERENCES book_projects(id) ON DELETE CASCADE,
+    photo_filename TEXT NOT NULL,
+    caption TEXT,
+    uploaded_by INTEGER REFERENCES people(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS book_photo_people (
+    book_photo_id INTEGER NOT NULL REFERENCES book_photos(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    PRIMARY KEY (book_photo_id, person_id)
+);
+
 -- Seed the default question bank (only runs once — INSERT OR IGNORE against
 -- fixed ids means re-running schema.sql on an existing database is safe).
 -- "child" is deliberately the longest and most structured section (Uganda →
