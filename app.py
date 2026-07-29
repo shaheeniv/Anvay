@@ -421,8 +421,12 @@ def transcribe_video_entry(entry_id, video_path):
             )
 
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        # No language hint here — OpenAI's API only accepts a specific
+        # allowlist of codes for that parameter and Gujarati isn't on it,
+        # even though the model itself recognizes Gujarati fine via
+        # automatic language detection when the hint is simply omitted.
         with open(audio_path, "rb") as f:
-            gujarati = client.audio.transcriptions.create(model="whisper-1", file=f, language="gu")
+            gujarati = client.audio.transcriptions.create(model="whisper-1", file=f)
         with open(audio_path, "rb") as f:
             english = client.audio.translations.create(model="whisper-1", file=f)
 
