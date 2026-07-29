@@ -15,6 +15,8 @@ Then open: http://127.0.0.1:5000
 import os
 import secrets
 import sqlite3
+import subprocess
+import threading
 import uuid
 from collections import defaultdict
 from datetime import date
@@ -39,7 +41,13 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATABASE = DATA_DIR / "archive.db"
 SCHEMA = BASE_DIR / "schema.sql"
 UPLOAD_DIR = DATA_DIR / "uploads"
+VIDEO_DIR = DATA_DIR / "videos"
 ALLOWED_PHOTO_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+ALLOWED_VIDEO_EXTENSIONS = {"mp4", "mov", "m4v", "avi", "webm"}
+# OpenAI Whisper's API caps uploads at 25MB — comfortably covers the
+# compressed mono audio track we extract per video, not the raw video
+# file itself (which is uploaded separately, at ordinary video sizes).
+WHISPER_MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 CONTRIBUTION_KINDS = [
     ("memory", "Memory"),
@@ -74,7 +82,7 @@ def _load_or_create_secret_key():
 
 app = Flask(__name__)
 app.secret_key = _load_or_create_secret_key()
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB per upload
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB per upload — covers full video files
 
 
 def get_db():
@@ -188,6 +196,15 @@ def uploaded_file(filename):
     persistent disk rather than alongside the code. Still behind the
     login gate like every other route (not in PUBLIC_ENDPOINTS)."""
     return send_from_directory(UPLOAD_DIR, filename)
+
+
+@app.route("/videos/<path:filename>")
+def uploaded_video(filename):
+    """Serves uploaded video files from VIDEO_DIR. send_from_directory
+    supports HTTP Range requests out of the box, which is what lets a
+    browser's <video> player seek/scrub instead of downloading the
+    whole file up front."""
+    return send_from_directory(VIDEO_DIR, filename)
 
 
 @app.route("/")
@@ -343,6 +360,89 @@ ENTRY_QUERY = """
 """
 
 
+def save_video_upload(file_storage):
+    if not file_storage or not file_storage.filename:
+        return None
+    ext = file_storage.filename.rsplit(".", 1)[-1].lower() if "." in file_storage.filename else ""
+    if ext not in ALLOWED_VIDEO_EXTENSIONS:
+        flash(f"Video not saved — \"{file_storage.filename}\" isn't a supported video type.")
+        return None
+    VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file_storage.filename)}"
+    file_storage.save(VIDEO_DIR / filename)
+    return filename
+
+
+def start_transcription(entry_id, video_filename):
+    """Kicks off transcribe_video_entry() in a background thread so the
+    upload request returns immediately instead of waiting on Whisper.
+    No-ops (leaving transcription_status NULL) if OPENAI_API_KEY isn't
+    configured — auto-transcription is optional, not required to log a
+    video entry."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        return
+    db = get_db()
+    db.execute("UPDATE video_entries SET transcription_status = 'pending' WHERE id = ?", (entry_id,))
+    db.commit()
+    video_path = VIDEO_DIR / video_filename
+    thread = threading.Thread(target=transcribe_video_entry, args=(entry_id, video_path), daemon=True)
+    thread.start()
+
+
+def transcribe_video_entry(entry_id, video_path):
+    """Runs in a background thread. Extracts a small compressed audio
+    track (Whisper's API caps uploads at 25MB — the full video is a
+    separate, much larger file that's never sent to Whisper directly),
+    then calls OpenAI's Whisper API twice: once for the Gujarati
+    transcript, once for the English translation (Whisper only returns
+    one language per call, so there's no way to get both from a single
+    request). Uses its own sqlite3 connection since this runs outside
+    any Flask request context, so Flask's g-based get_db() isn't
+    available here."""
+    from openai import OpenAI
+    import imageio_ffmpeg
+
+    db = sqlite3.connect(DATABASE)
+    db.row_factory = sqlite3.Row
+    audio_path = video_path.with_suffix(".mp3")
+    try:
+        db.execute("UPDATE video_entries SET transcription_status = 'processing' WHERE id = ?", (entry_id,))
+        db.commit()
+
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        subprocess.run(
+            [ffmpeg_exe, "-y", "-i", str(video_path), "-vn", "-ac", "1", "-b:a", "64k", str(audio_path)],
+            check=True, capture_output=True,
+        )
+        if audio_path.stat().st_size > WHISPER_MAX_AUDIO_BYTES:
+            raise ValueError(
+                "This video's audio track is too long to transcribe automatically "
+                "(over Whisper's 25MB limit even after compression) — add the transcript by hand instead."
+            )
+
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        with open(audio_path, "rb") as f:
+            gujarati = client.audio.transcriptions.create(model="whisper-1", file=f, language="gu")
+        with open(audio_path, "rb") as f:
+            english = client.audio.translations.create(model="whisper-1", file=f)
+
+        db.execute(
+            "UPDATE video_entries SET gujarati_transcript = ?, english_translation = ?,"
+            " transcription_status = 'done', transcription_error = NULL WHERE id = ?",
+            (gujarati.text, english.text, entry_id),
+        )
+        db.commit()
+    except Exception as e:
+        db.execute(
+            "UPDATE video_entries SET transcription_status = 'failed', transcription_error = ? WHERE id = ?",
+            (str(e)[:500], entry_id),
+        )
+        db.commit()
+    finally:
+        db.close()
+        audio_path.unlink(missing_ok=True)
+
+
 @app.route("/stories")
 def stories():
     q = request.args.get("q", "").strip()
@@ -382,11 +482,12 @@ def new_entry():
 @app.route("/entries", methods=["POST"])
 def create_entry():
     db = get_db()
-    db.execute(
+    video_filename = save_video_upload(request.files.get("video_file"))
+    cur = db.execute(
         """
         INSERT INTO video_entries
-            (person_id, date_recorded, topic, gujarati_transcript, english_translation, video_link)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (person_id, date_recorded, topic, gujarati_transcript, english_translation, video_link, video_filename)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             request.form["person_id"],
@@ -395,9 +496,18 @@ def create_entry():
             request.form.get("gujarati_transcript", "").strip(),
             request.form.get("english_translation", "").strip(),
             request.form.get("video_link", "").strip(),
+            video_filename,
         ),
     )
+    entry_id = cur.lastrowid
     db.commit()
+
+    if video_filename:
+        if os.environ.get("OPENAI_API_KEY"):
+            start_transcription(entry_id, video_filename)
+        else:
+            flash("Video saved. Add OPENAI_API_KEY to enable automatic transcription — for now, add the transcript by hand.")
+
     return redirect(url_for("stories"))
 
 

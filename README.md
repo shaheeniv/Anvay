@@ -117,14 +117,42 @@ their contents). The video list itself lives at "Videos" in the nav
 
 ## Adding a video entry
 
-Video files themselves are too large to store in the database, so for
-each entry you paste in a **cloud link** (e.g. a Google Drive or iCloud
-share link) to where the actual video file lives. The archive stores
-that link plus: person, date recorded, topic, the original Gujarati
-transcript, and the English translation.
+There are two ways to attach the actual video to an entry:
+
+- **Upload the video file directly** — it's stored properly (under
+  `videos/`, alongside `archive.db`) and played right on the entry page.
+  If automatic transcription is set up (see below), the Gujarati
+  transcript and English translation are filled in for you a few minutes
+  after uploading — refresh the entry page to check. If it isn't set up,
+  the video still uploads and plays fine, you'd just add the transcript
+  by hand as before.
+- **Paste a cloud link** instead (e.g. Google Drive or iCloud) if you'd
+  rather not upload the file itself — no automatic transcription in this
+  case, just a link to click through and watch elsewhere.
+
+Either way, the archive stores: person, date recorded, topic, the
+original Gujarati transcript, and the English translation.
 
 The Gujarati transcript is always treated as the primary record — the
 English translation lives alongside it, never in place of it.
+
+### Setting up automatic transcription
+
+This uses OpenAI's Whisper model to transcribe the Gujarati audio and
+produce an English translation. It costs a small amount per video (a
+10-minute video costs well under 10 cents) and needs its own OpenAI
+account — set one up at [platform.openai.com](https://platform.openai.com),
+add billing, and create an API key.
+
+- **Local dev**: set the `OPENAI_API_KEY` environment variable before
+  running `python3 app.py`, e.g. add `export OPENAI_API_KEY=sk-...` to
+  your shell profile, or prefix the run command:
+  `OPENAI_API_KEY=sk-... python3 app.py`.
+- **Hosted (Render)**: add `OPENAI_API_KEY` as an environment variable in
+  Render's dashboard, same as `SECRET_KEY`.
+
+Without this set, video upload still works fine — transcription is
+simply skipped, and you'd fill in the transcript/translation by hand.
 
 ## Family tree
 
@@ -213,9 +241,10 @@ Because everything is in one SQLite file (`archive.db`), you can:
 - Export it to CSV or another format later — nothing here locks the
   data into this particular website.
 
-Uploaded photos live in `uploads/` (next to `archive.db`, both inside
-`DATA_DIR`) — back that folder up alongside `archive.db` (the database
-only stores the filenames, not the image data itself).
+Uploaded photos live in `uploads/`, and uploaded videos in `videos/`
+(both next to `archive.db`, inside `DATA_DIR`) — back both folders up
+alongside `archive.db` (the database only stores the filenames, not the
+actual image/video data).
 
 ## Legacy Books
 

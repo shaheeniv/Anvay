@@ -12,9 +12,25 @@
     </div>
   </div>
 
-  {% if entry['video_link'] %}
+  {% if entry['video_filename'] %}
+    <video class="entry-video" controls preload="metadata"
+      src="{{ url_for('uploaded_video', filename=entry['video_filename']) }}"></video>
+  {% elif entry['video_link'] %}
     <p class="video-link">
       <a href="{{ entry['video_link'] }}" target="_blank" rel="noopener noreferrer">▶ Watch the video</a>
+    </p>
+  {% endif %}
+
+  {% if entry['transcription_status'] in ('pending', 'processing') %}
+    <p class="hint transcription-status">
+      Transcribing this video automatically (Gujarati + English) — this can
+      take a few minutes. Refresh this page to check.
+    </p>
+  {% elif entry['transcription_status'] == 'failed' %}
+    <p class="hint transcription-status transcription-status--failed">
+      Automatic transcription didn't work for this video
+      {% if entry['transcription_error'] %} ({{ entry['transcription_error'] }}){% endif %} —
+      add the transcript by hand instead using "Edit" above.
     </p>
   {% endif %}
 

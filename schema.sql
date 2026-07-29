@@ -54,7 +54,10 @@ CREATE TABLE IF NOT EXISTS video_entries (
     topic TEXT,                         -- short topic/summary
     gujarati_transcript TEXT,           -- primary source, never overwritten
     english_translation TEXT,           -- lives alongside the original
-    video_link TEXT,                    -- cloud link to the actual video file
+    video_link TEXT,                    -- optional cloud link, when no file is uploaded
+    video_filename TEXT,                -- optional, stored under videos/ — the actual video file
+    transcription_status TEXT,          -- NULL (manual/no video file), pending, processing, done, failed
+    transcription_error TEXT,           -- set when transcription_status = 'failed'
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

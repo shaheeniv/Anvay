@@ -9,6 +9,7 @@
   <form
     class="entry-form"
     method="post"
+    enctype="multipart/form-data"
     action="{% if entry %}{{ url_for('update_entry', entry_id=entry['id']) }}{% else %}{{ url_for('create_entry') }}{% endif %}"
   >
     <label for="person_id">Person</label>
@@ -36,7 +37,15 @@
       placeholder="e.g. Growing up in Nairobi, the family recipe for theplas…"
       value="{{ (entry['topic'] or '') if entry else '' }}">
 
-    <label for="video_link">Video link</label>
+    {% if not entry %}
+      <label for="video_file">Video file <span class="hint">(optional — uploading here stores the video and automatically fills in the Gujarati transcript and English translation below)</span></label>
+      <input type="file" id="video_file" name="video_file" accept="video/mp4,video/quicktime,video/x-m4v,video/avi,video/webm">
+    {% elif entry['video_filename'] %}
+      <label>Video</label>
+      <p class="hint">A video file is already attached to this entry (uploading a replacement isn't supported yet).</p>
+    {% endif %}
+
+    <label for="video_link">Video link <span class="hint">(optional — an external link instead of/alongside an uploaded file)</span></label>
     <input type="url" id="video_link" name="video_link"
       placeholder="Link to the video (Google Drive, iCloud, etc.)"
       value="{{ (entry['video_link'] or '') if entry else '' }}">
