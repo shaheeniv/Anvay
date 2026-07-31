@@ -16,10 +16,10 @@
   <section class="relation-section">
     <h2>Photos</h2>
     <p class="hint">
-      {{ photo_count }} photo{{ 's' if photo_count != 1 else '' }} added so far —
-      these can be used when this book is compiled.
+      {{ photo_count }} photo{{ 's' if photo_count != 1 else '' }} selected so far
+      from the Contributions feed — these can be used when this book is compiled.
     </p>
-    <a class="small-link" href="{{ url_for('book_photos', book_id=book['id']) }}">View &amp; add photos &rarr;</a>
+    <a class="small-link" href="{{ url_for('book_photos', book_id=book['id']) }}">Select photos for this book &rarr;</a>
   </section>
 
   <section class="relation-section">

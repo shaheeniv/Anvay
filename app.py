@@ -656,17 +656,6 @@ def show_person(person_id):
     account = db.execute(
         "SELECT * FROM accounts WHERE person_id = ?", (person_id,)
     ).fetchone()
-    book_photos_tagged = db.execute(
-        """
-        SELECT book_photos.*, book_projects.title AS book_title
-        FROM book_photo_people
-        JOIN book_photos ON book_photos.id = book_photo_people.book_photo_id
-        JOIN book_projects ON book_projects.id = book_photos.book_project_id
-        WHERE book_photo_people.person_id = ?
-        ORDER BY book_photos.created_at DESC
-        """,
-        (person_id,),
-    ).fetchall()
 
     return render_template(
         "person.html",
@@ -682,7 +671,6 @@ def show_person(person_id):
         is_unlocked=is_unlocked,
         describe_time_until=describe_time_until,
         account=account,
-        book_photos_tagged=book_photos_tagged,
     )
 
 
@@ -972,16 +960,6 @@ RELATIONSHIP_LABELS = {
 }
 
 
-def get_book_subject_ids(book_id):
-    db = get_db()
-    return [
-        row["person_id"]
-        for row in db.execute(
-            "SELECT person_id FROM book_subjects WHERE book_project_id = ?", (book_id,)
-        )
-    ]
-
-
 def classify_relationship(subject_ids, viewer_id):
     """Classify viewer_id's relationship to a Legacy Book's subject(s) (one
     person or a couple), for picking which question set they see:
@@ -1217,30 +1195,6 @@ def set_linked_people(contribution_id, person_ids):
         db.execute(
             "INSERT OR IGNORE INTO contribution_people (contribution_id, person_id) VALUES (?, ?)",
             (contribution_id, pid),
-        )
-    db.commit()
-
-
-def get_book_photo_people(book_photo_id):
-    db = get_db()
-    return db.execute(
-        """
-        SELECT people.* FROM book_photo_people
-        JOIN people ON people.id = book_photo_people.person_id
-        WHERE book_photo_people.book_photo_id = ?
-        ORDER BY people.name
-        """,
-        (book_photo_id,),
-    ).fetchall()
-
-
-def set_book_photo_people(book_photo_id, person_ids):
-    db = get_db()
-    db.execute("DELETE FROM book_photo_people WHERE book_photo_id = ?", (book_photo_id,))
-    for pid in person_ids:
-        db.execute(
-            "INSERT OR IGNORE INTO book_photo_people (book_photo_id, person_id) VALUES (?, ?)",
-            (book_photo_id, pid),
         )
     db.commit()
 
@@ -1652,7 +1606,7 @@ def show_book(book_id):
     ).fetchone()["c"]
 
     photo_count = db.execute(
-        "SELECT COUNT(*) AS c FROM book_photos WHERE book_project_id = ?", (book_id,)
+        "SELECT COUNT(*) AS c FROM book_contribution_photos WHERE book_project_id = ?", (book_id,)
     ).fetchone()["c"]
 
     return render_template(
@@ -1729,65 +1683,44 @@ def submit_book_answers(book_id):
     return redirect(url_for("show_book", book_id=book_id))
 
 
-@app.route("/books/<int:book_id>/photos")
+@app.route("/books/<int:book_id>/photos", methods=["GET", "POST"])
 def book_photos(book_id):
+    """Photos for a Legacy Book are picked from the existing Contributions
+    feed (kind='photo') rather than uploaded here directly — there's only
+    one place to add a photo to the archive, and a book just marks which
+    of those are relevant to it."""
     db = get_db()
     book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
     if book is None:
         return "Book not found", 404
 
-    photos = db.execute(
-        """
-        SELECT book_photos.*, people.name AS uploaded_by_name
-        FROM book_photos
-        LEFT JOIN people ON people.id = book_photos.uploaded_by
-        WHERE book_photos.book_project_id = ?
-        ORDER BY book_photos.created_at DESC
-        """,
-        (book_id,),
-    ).fetchall()
-    tagged_by_photo = {photo["id"]: get_book_photo_people(photo["id"]) for photo in photos}
+    if request.method == "POST":
+        contribution_ids = [int(cid) for cid in request.form.getlist("contribution_ids")]
+        db.execute("DELETE FROM book_contribution_photos WHERE book_project_id = ?", (book_id,))
+        for contribution_id in contribution_ids:
+            db.execute(
+                "INSERT OR IGNORE INTO book_contribution_photos (book_project_id, contribution_id) VALUES (?, ?)",
+                (book_id, contribution_id),
+            )
+        db.commit()
+        flash("Photo selection updated for this book.")
+        return redirect(url_for("show_book", book_id=book_id))
 
-    book_family_ids = get_visible_person_ids(get_book_subject_ids(book_id))
-    people = [p for p in db.execute("SELECT * FROM people ORDER BY name") if p["id"] in book_family_ids]
+    photo_contributions = db.execute(
+        CONTRIBUTION_QUERY
+        + " WHERE contributions.kind = 'photo' AND contributions.photo_filename IS NOT NULL"
+        " ORDER BY contributions.created_at DESC"
+    ).fetchall()
+    selected_ids = {
+        row["contribution_id"]
+        for row in db.execute(
+            "SELECT contribution_id FROM book_contribution_photos WHERE book_project_id = ?", (book_id,)
+        )
+    }
 
     return render_template(
-        "book_photos.html", book=book, photos=photos, tagged_by_photo=tagged_by_photo,
-        people=people,
+        "book_photos.html", book=book, photo_contributions=photo_contributions, selected_ids=selected_ids,
     )
-
-
-@app.route("/books/<int:book_id>/photos", methods=["POST"])
-def create_book_photo(book_id):
-    db = get_db()
-    book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
-    if book is None:
-        return "Book not found", 404
-
-    photo_filename = save_photo_upload(request.files.get("photo"))
-    if not photo_filename:
-        return redirect(url_for("book_photos", book_id=book_id))
-
-    cur = db.execute(
-        "INSERT INTO book_photos (book_project_id, photo_filename, caption, uploaded_by) VALUES (?, ?, ?, ?)",
-        (book_id, photo_filename, request.form.get("caption", "").strip() or None, session["person_id"]),
-    )
-    photo_id = cur.lastrowid
-    db.commit()
-    person_ids = [int(pid) for pid in request.form.getlist("person_ids")]
-    set_book_photo_people(photo_id, person_ids)
-    flash("Photo added.")
-    return redirect(url_for("book_photos", book_id=book_id))
-
-
-@app.route("/books/<int:book_id>/photos/<int:photo_id>/delete", methods=["POST"])
-def delete_book_photo(book_id, photo_id):
-    db = get_db()
-    db.execute(
-        "DELETE FROM book_photos WHERE id = ? AND book_project_id = ?", (photo_id, book_id)
-    )
-    db.commit()
-    return redirect(url_for("book_photos", book_id=book_id))
 
 
 if not DATABASE.exists():

@@ -181,10 +181,9 @@ connection (e.g. your child's spouse's parents) doesn't itself grant
 you access, only a direct link does. Admin accounts always see
 everything, regardless of branch.
 
-Each person's profile lists any story/video entries linked to them
-(with a shortcut to log a new one), any Legacy Book photos they've been
-tagged in (linking back to that book), and now also has room for a
-surname, where they were born, and three words to describe them —
+Each person's profile lists any story/video entries and contributions
+linked to them (with shortcuts to add a new one), and now also has room
+for a surname, where they were born, and three words to describe them —
 edit any of that from their profile's "Edit" button.
 
 ## Contribution feed
@@ -258,11 +257,12 @@ Kenya), so the default wording won't always fit. From a book's page,
 admins see an "Edit these questions for this book" link to reword any
 question just for that book.
 
-Each book also has its own **Photos** page ("View & add photos" from the
-book's page) — anyone can upload a photo, add a short description, and
-tag who's in it. These are kept separate from the main Contributions
-feed, since they're specifically meant to be sourced when this book is
-eventually compiled, alongside the interviews and written answers.
+Photos aren't uploaded separately per book — there's just one place to
+add a photo to the archive at all, the Contributions feed (see below).
+Each book has a **"Select photos for this book"** page instead, listing
+every photo from Contributions with a checkbox for whether it's relevant
+to this book. Selected photos can be used when the book is eventually
+compiled, alongside the interviews and written answers.
 
 What's built so far is just the data-collection side — gathering the
 interviews and everyone's answers in one place. Turning all of that into
