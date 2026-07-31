@@ -204,6 +204,19 @@ main.wide {
   line-height: 1.6;
 }
 
+.home-intro p {
+  margin: 0 0 1.1rem;
+}
+
+.home-intro p:last-child {
+  margin-bottom: 0;
+}
+
+.home-intro em {
+  color: var(--brown-dark);
+  font-style: italic;
+}
+
 h1 {
   margin: 0 0 0.25rem;
   font-size: 1.9rem;
