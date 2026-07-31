@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header hero-header">
+    <img src="{{ url_for('static', filename='logo-full.png') }}" alt="Anvay — Stories, Roots, Legacy" class="hero-logo">
+  </div>
+
+  <p class="home-intro">
+    Anvay is our family's private space, with two things to explore.
+    The <strong>Family Portal</strong> is the ongoing home for all of
+    us — family tree, video interviews, photos and memories, and time
+    capsule letters — that just keeps growing as our family does.
+    <strong>Legacy Books</strong> are a different kind of project: a
+    proper written biography of one person or couple's life, built from
+    their own interviews plus everyone answering a few questions about
+    them.
+  </p>
+
+  <section class="family-box">
+    <div class="family-box-links">
+      <a class="family-box-link" href="{{ url_for('login') }}">
+        <span class="family-box-name">Log in</span>
+        <span class="family-box-cta">Enter Anvay &rarr;</span>
+      </a>
+    </div>
+  </section>
+
+{% endblock %}

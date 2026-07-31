@@ -110,7 +110,7 @@ def init_db():
 # is all real per-person login needs here. A single before_request gate
 # covers every existing route in one place instead of decorating each one.
 
-PUBLIC_ENDPOINTS = {"login", "static"}
+PUBLIC_ENDPOINTS = {"login", "static", "home"}
 
 
 @app.before_request
@@ -203,13 +203,14 @@ def uploaded_video(filename):
 
 @app.route("/")
 def home():
-    """The site's front door: a choice between the ongoing Family Portal
-    (the dashboard below, at /dashboard) and the Legacy Books index
-    (which lists every book project — there will be more than one over
-    time, one per family branch, so this links to the index rather than
-    listing each one here directly). Lives at "/" so returning visitors
-    with an existing session land here too, not straight into either
-    product."""
+    """The site's front door. Logged-out visitors see a public welcome
+    page (logo, tagline, a plain-language explanation of what Anvay is,
+    and a "Log in" box) — not gated behind the login wall, since there'd
+    otherwise be nothing to explain what they're even logging into.
+    Logged-in visitors instead see a choice between the ongoing Family
+    Portal (the dashboard, at /dashboard) and the Legacy Books index."""
+    if current_person() is None:
+        return render_template("welcome.html")
     return render_template("home.html")
 
 

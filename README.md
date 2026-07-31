@@ -75,10 +75,13 @@ sqlite3 archive.db "UPDATE accounts SET password_hash = 'PASTE_THE_STRING_HERE' 
 
 ## Landing page
 
-Logging in (or clicking the logo/"Home") takes you to a chooser between
-the two things this site does: the **Family Portal** (everything below)
-and any **Legacy Books** in progress. Click "Family Portal" to reach the
-dashboard.
+Visiting the site while logged out shows a public welcome page — logo,
+tagline, a plain explanation of what Anvay is, and a "Log in" box (no
+account details are shown here, it's just the front door). Logging in
+takes you to a chooser between the two things this site does: the
+**Family Portal** (everything below) and any **Legacy Books** in
+progress. Click "Family Portal" to reach the dashboard. Clicking the
+logo/"Home" while logged in returns here too.
 
 ## Home dashboard
 
