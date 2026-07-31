@@ -76,6 +76,29 @@
   </section>
 
   <section class="relation-section">
+    <h2>Legacy Book photos</h2>
+    {% if book_photos_tagged %}
+      <ul class="book-photo-gallery">
+        {% for photo in book_photos_tagged %}
+          <li class="book-photo-card">
+            <a href="{{ url_for('book_photos', book_id=photo['book_project_id']) }}">
+              <img src="{{ url_for('uploaded_file', filename=photo['photo_filename']) }}" alt="{{ photo['caption'] or '' }}">
+            </a>
+            <div class="book-photo-info">
+              {% if photo['caption'] %}
+                <p class="book-photo-caption">{{ photo['caption'] }}</p>
+              {% endif %}
+              <p class="book-photo-meta">From {{ photo['book_title'] }}</p>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">{{ person['name'] }} hasn't been tagged in any Legacy Book photos yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="relation-section">
     <h2>Time capsule letters</h2>
     {% if capsules %}
       <ul class="entry-list">

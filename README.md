@@ -182,7 +182,8 @@ you access, only a direct link does. Admin accounts always see
 everything, regardless of branch.
 
 Each person's profile lists any story/video entries linked to them
-(with a shortcut to log a new one), and now also has room for a
+(with a shortcut to log a new one), any Legacy Book photos they've been
+tagged in (linking back to that book), and now also has room for a
 surname, where they were born, and three words to describe them —
 edit any of that from their profile's "Edit" button.
 

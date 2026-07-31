@@ -656,6 +656,17 @@ def show_person(person_id):
     account = db.execute(
         "SELECT * FROM accounts WHERE person_id = ?", (person_id,)
     ).fetchone()
+    book_photos_tagged = db.execute(
+        """
+        SELECT book_photos.*, book_projects.title AS book_title
+        FROM book_photo_people
+        JOIN book_photos ON book_photos.id = book_photo_people.book_photo_id
+        JOIN book_projects ON book_projects.id = book_photos.book_project_id
+        WHERE book_photo_people.person_id = ?
+        ORDER BY book_photos.created_at DESC
+        """,
+        (person_id,),
+    ).fetchall()
 
     return render_template(
         "person.html",
@@ -671,6 +682,7 @@ def show_person(person_id):
         is_unlocked=is_unlocked,
         describe_time_until=describe_time_until,
         account=account,
+        book_photos_tagged=book_photos_tagged,
     )
 
 
