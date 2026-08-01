@@ -22,6 +22,8 @@
     {% if current_person %}
     {% set nav_section %}{% block nav_section %}portal{% endblock %}{% endset %}
     {% set nav_section = nav_section.strip() %}
+    <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">&#9776;</label>
     <div class="header-right">
       <nav>
         {% if nav_section == 'portal' %}

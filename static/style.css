@@ -160,6 +160,61 @@ a { color: var(--brown-dark); }
   cursor: pointer;
 }
 
+/* Mobile nav — a checkbox-driven toggle (no JS needed) that collapses the
+   nav links + logout behind a hamburger button below the phone breakpoint.
+   Desktop is untouched: the checkbox and label stay hidden and
+   .header-right displays exactly as before. */
+
+.nav-toggle-checkbox {
+  display: none;
+}
+
+.nav-toggle-label {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .nav-toggle-label {
+    display: block;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--navy);
+    cursor: pointer;
+    padding: 0.25rem 0.4rem;
+    margin-left: auto;
+  }
+
+  .header-right {
+    display: none;
+    width: 100%;
+    flex-basis: 100%;
+    justify-content: flex-start;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .nav-toggle-checkbox:checked ~ .header-right {
+    display: flex;
+  }
+
+  .site-header nav {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .site-header nav a {
+    margin-left: 0;
+    padding: 0.7rem 0;
+    width: 100%;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .logout-form {
+    padding: 0.9rem 0 0.2rem;
+  }
+}
+
 main {
   max-width: 760px;
   margin: 0 auto;
@@ -194,6 +249,17 @@ main.wide {
   width: 100%;
   max-width: 380px;
   height: auto;
+}
+
+@media (max-width: 480px) {
+  .hero-logo {
+    max-width: 240px;
+  }
+
+  .page-header.hero-header {
+    padding-top: 0;
+    padding-bottom: 1rem;
+  }
 }
 
 .home-intro {
@@ -280,6 +346,20 @@ h2 {
   font-size: 0.9rem;
   color: var(--muted);
   text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .search-bar {
+    flex-wrap: wrap;
+  }
+
+  .search-bar input[type="text"] {
+    flex: 1 1 100%;
+  }
+
+  .search-bar button {
+    flex: 1 1 100%;
+  }
 }
 
 .entry-list {
@@ -597,6 +677,19 @@ h2 {
 .tree-scroll {
   overflow-x: auto;
   padding: 1.5rem 0 3rem;
+}
+
+.tree-scroll-hint {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .tree-scroll-hint {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: -0.75rem 0 0.5rem;
+  }
 }
 
 .branch-tree-canvas {
@@ -991,6 +1084,22 @@ h2 {
   font-size: 0.85rem;
   color: var(--brown);
   font-weight: bold;
+}
+
+.welcome-login-box {
+  max-width: 260px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.welcome-login-box .family-box-links {
+  display: block;
+}
+
+.welcome-login-box .family-box-link {
+  align-items: center;
+  padding: 0.9rem 1.1rem;
 }
 
 .stat-grid {
