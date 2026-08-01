@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Link Not Available — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header hero-header">
+    <img src="{{ url_for('static', filename='logo-full.png') }}" alt="Anvay — Stories, Roots, Legacy" class="hero-logo">
+  </div>
+
+  <div class="home-intro">
+    <p>
+      This invite link isn't available any more — it may have been revoked,
+      or the address may not be quite right.
+    </p>
+    <p>
+      If you're trying to add a memory to a Legacy Book, please get in touch
+      with the family member who shared this link with you.
+    </p>
+  </div>
+
+{% endblock %}

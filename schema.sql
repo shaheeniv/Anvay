@@ -160,6 +160,39 @@ CREATE TABLE IF NOT EXISTS book_contribution_photos (
     PRIMARY KEY (book_project_id, contribution_id)
 );
 
+-- A named, admin-issued invite link for someone outside the family tree
+-- (no person row, no account) to contribute memories to one specific book.
+-- The token itself is the credential — knowing it is what grants access to
+-- the public /contribute/<token> page, so it must be long and random.
+-- revoked_at lets an admin kill a link without deleting the record (and
+-- without deleting anything that person already contributed).
+CREATE TABLE IF NOT EXISTS book_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_project_id INTEGER NOT NULL REFERENCES book_projects(id) ON DELETE CASCADE,
+    contributor_name TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    created_by INTEGER REFERENCES people(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    revoked_at TEXT
+);
+
+-- What an outside contributor submits through their invite link. Starts as
+-- 'pending' and is invisible to the family until an admin approves it —
+-- the link could be forwarded further than intended, so nothing outside
+-- contributors write goes into the book unreviewed.
+CREATE TABLE IF NOT EXISTS book_guest_contributions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_project_id INTEGER NOT NULL REFERENCES book_projects(id) ON DELETE CASCADE,
+    invite_id INTEGER NOT NULL REFERENCES book_invites(id) ON DELETE CASCADE,
+    memory_text TEXT,
+    photo_filename TEXT,
+    video_filename TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',   -- pending, approved, rejected
+    submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT,
+    reviewed_by INTEGER REFERENCES people(id)
+);
+
 -- Seed the default question bank (only runs once — INSERT OR IGNORE against
 -- fixed ids means re-running schema.sql on an existing database is safe).
 -- "child" is deliberately the longest and most structured section (Uganda →

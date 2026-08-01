@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Invite Links — {{ book['title'] }} — Anvay{% endblock %}
+{% block nav_section %}book{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <div>
+      <h1>Invite Links</h1>
+      <p class="entry-meta">for {{ book['title'] }}</p>
+    </div>
+    <a class="button" href="{{ url_for('show_book', book_id=book['id']) }}">&larr; Back to {{ book['title'] }}</a>
+  </div>
+
+  <p class="hint">
+    Anyone outside the family tree — a close friend, a neighbour, anyone
+    who knew {{ book['title'].replace('The Life of ', '') }} — can add
+    memories to this book without a login, using a private link made just
+    for them. Everything they submit is reviewed by an admin before it's
+    visible to the family.
+  </p>
+
+  <section class="relation-section">
+    <h2>Create a new invite</h2>
+    <form class="entry-form" method="post" action="{{ url_for('book_invites', book_id=book['id']) }}">
+      <label for="contributor_name">Their name</label>
+      <input type="text" id="contributor_name" name="contributor_name" required
+        placeholder="e.g. Priya — Parbat's best friend">
+      <div class="form-actions">
+        <button type="submit" class="button">Create invite link</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="relation-section">
+    <h2>Existing invites</h2>
+    {% if invites %}
+      <ul class="invite-list">
+        {% for invite in invites %}
+          <li class="invite-card{{ ' invite-card--revoked' if invite['revoked_at'] else '' }}">
+            <div class="invite-card-info">
+              <p class="invite-name">{{ invite['contributor_name'] }}</p>
+              {% if invite['revoked_at'] %}
+                <p class="hint">Revoked — this link no longer works.</p>
+              {% else %}
+                <p class="invite-link">{{ url_for('guest_contribute', token=invite['token'], _external=True) }}</p>
+              {% endif %}
+            </div>
+            {% if not invite['revoked_at'] %}
+              <form method="post" action="{{ url_for('revoke_book_invite', book_id=book['id'], invite_id=invite['id']) }}"
+                onsubmit="return confirm('Revoke this invite link? It will stop working immediately.');">
+                <button type="submit" class="small-button small-button--danger">Revoke</button>
+              </form>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">No invites created yet.</p>
+    {% endif %}
+  </section>
+
+{% endblock %}

@@ -267,6 +267,26 @@ every photo from Contributions with a checkbox for whether it's relevant
 to this book. Selected photos can be used when the book is eventually
 compiled, alongside the interviews and written answers.
 
+### Inviting people outside the family
+
+Sometimes the best memories of someone come from a close friend or
+neighbour who isn't in the family tree at all and won't have a login.
+From a book's page, admins see a **"Manage invite links"** link — creating
+one there generates a private, unguessable web address for one named
+person (e.g. "Priya — Parbat's best friend"). Share that link with them
+directly (text, WhatsApp, email, however you'd normally reach them); no
+account or password is needed on their end. It opens a simple page where
+they can write a memory and optionally attach a photo or video, with no
+access to anything else on the site.
+
+Nothing they submit appears in the book automatically — it lands in a
+**"Waiting for your review"** queue on the book's page, visible only to
+admins, where it can be approved or rejected. Once approved, it shows up
+under "Memories from friends & family" for everyone who can see that
+book. An invite link can be revoked at any time from the same "Manage
+invite links" page, which immediately stops it from working (anything
+already submitted through it stays exactly as it was).
+
 What's built so far is just the data-collection side — gathering the
 interviews and everyone's answers in one place. Turning all of that into
 an actual compiled, readable book (using AI to weave the video interviews

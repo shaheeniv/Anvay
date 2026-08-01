@@ -22,6 +22,63 @@
     <a class="small-link" href="{{ url_for('book_photos', book_id=book['id']) }}">Select photos for this book &rarr;</a>
   </section>
 
+  {% if current_person and current_person['is_admin'] %}
+    <section class="relation-section">
+      <h2>Memories from outside the family</h2>
+      <p class="hint">
+        Invite someone who isn't in the family tree — a friend, a neighbour —
+        to add their own memories to this book with a private link.
+      </p>
+      <a class="small-link" href="{{ url_for('book_invites', book_id=book['id']) }}">Manage invite links &rarr;</a>
+
+      {% if pending_guest_contributions %}
+        <h3>Waiting for your review ({{ pending_guest_contributions|length }})</h3>
+        <ul class="guest-contribution-list">
+          {% for gc in pending_guest_contributions %}
+            <li class="guest-contribution-card">
+              <p class="guest-contribution-meta">From <strong>{{ gc['contributor_name'] }}</strong> · {{ gc['submitted_at'][:10] }}</p>
+              {% if gc['memory_text'] %}<p class="guest-contribution-text">{{ gc['memory_text'] }}</p>{% endif %}
+              {% if gc['photo_filename'] %}
+                <img class="guest-contribution-photo" src="{{ url_for('uploaded_file', filename=gc['photo_filename']) }}" alt="">
+              {% endif %}
+              {% if gc['video_filename'] %}
+                <video class="guest-contribution-video" controls src="{{ url_for('uploaded_video', filename=gc['video_filename']) }}"></video>
+              {% endif %}
+              <div class="form-actions">
+                <form method="post" action="{{ url_for('approve_guest_contribution', book_id=book['id'], contribution_id=gc['id']) }}">
+                  <button type="submit" class="small-button">Approve</button>
+                </form>
+                <form method="post" action="{{ url_for('reject_guest_contribution', book_id=book['id'], contribution_id=gc['id']) }}">
+                  <button type="submit" class="small-button small-button--danger">Reject</button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {% if approved_guest_contributions %}
+    <section class="relation-section">
+      <h2>Memories from friends & family</h2>
+      <ul class="guest-contribution-list">
+        {% for gc in approved_guest_contributions %}
+          <li class="guest-contribution-card">
+            <p class="guest-contribution-meta">From <strong>{{ gc['contributor_name'] }}</strong> · {{ gc['submitted_at'][:10] }}</p>
+            {% if gc['memory_text'] %}<p class="guest-contribution-text">{{ gc['memory_text'] }}</p>{% endif %}
+            {% if gc['photo_filename'] %}
+              <img class="guest-contribution-photo" src="{{ url_for('uploaded_file', filename=gc['photo_filename']) }}" alt="">
+            {% endif %}
+            {% if gc['video_filename'] %}
+              <video class="guest-contribution-video" controls src="{{ url_for('uploaded_video', filename=gc['video_filename']) }}"></video>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
   <section class="relation-section">
     <h2>Their own interviews</h2>
     {% if entries %}

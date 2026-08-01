@@ -986,6 +986,91 @@ h2 {
   display: block;
 }
 
+/* Legacy Book invite links + guest contributions */
+
+.invite-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.invite-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+  box-shadow: var(--shadow-card);
+}
+
+.invite-card--revoked {
+  opacity: 0.6;
+}
+
+.invite-name {
+  margin: 0 0 0.3rem;
+  font-weight: bold;
+  color: var(--navy);
+}
+
+.invite-link {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--brown-dark);
+  word-break: break-all;
+}
+
+.small-button--danger {
+  border-color: #a13d3d;
+  color: #a13d3d;
+}
+
+.guest-contribution-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.guest-contribution-card {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.guest-contribution-meta {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.guest-contribution-text {
+  margin: 0 0 0.75rem;
+  white-space: pre-wrap;
+}
+
+.guest-contribution-photo {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.guest-contribution-video {
+  max-width: 100%;
+  border-radius: 8px;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
 .checkbox-list {
   display: flex;
   flex-wrap: wrap;

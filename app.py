@@ -110,7 +110,7 @@ def init_db():
 # is all real per-person login needs here. A single before_request gate
 # covers every existing route in one place instead of decorating each one.
 
-PUBLIC_ENDPOINTS = {"login", "static", "home"}
+PUBLIC_ENDPOINTS = {"login", "static", "home", "guest_contribute"}
 
 
 @app.before_request
@@ -1610,6 +1610,31 @@ def show_book(book_id):
         "SELECT COUNT(*) AS c FROM book_contribution_photos WHERE book_project_id = ?", (book_id,)
     ).fetchone()["c"]
 
+    approved_guest_contributions = db.execute(
+        """
+        SELECT book_guest_contributions.*, book_invites.contributor_name
+        FROM book_guest_contributions
+        JOIN book_invites ON book_invites.id = book_guest_contributions.invite_id
+        WHERE book_guest_contributions.book_project_id = ? AND book_guest_contributions.status = 'approved'
+        ORDER BY book_guest_contributions.submitted_at DESC
+        """,
+        (book_id,),
+    ).fetchall()
+
+    pending_guest_contributions = []
+    viewer = current_person()
+    if viewer and viewer["is_admin"]:
+        pending_guest_contributions = db.execute(
+            """
+            SELECT book_guest_contributions.*, book_invites.contributor_name
+            FROM book_guest_contributions
+            JOIN book_invites ON book_invites.id = book_guest_contributions.invite_id
+            WHERE book_guest_contributions.book_project_id = ? AND book_guest_contributions.status = 'pending'
+            ORDER BY book_guest_contributions.submitted_at
+            """,
+            (book_id,),
+        ).fetchall()
+
     return render_template(
         "book.html",
         book=book,
@@ -1619,6 +1644,8 @@ def show_book(book_id):
         existing_answers=existing_answers,
         contributor_count=contributor_count,
         photo_count=photo_count,
+        approved_guest_contributions=approved_guest_contributions,
+        pending_guest_contributions=pending_guest_contributions,
     )
 
 
@@ -1722,6 +1749,122 @@ def book_photos(book_id):
     return render_template(
         "book_photos.html", book=book, photo_contributions=photo_contributions, selected_ids=selected_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# Legacy Book guest contributions — a named, admin-issued link lets someone
+# outside the family tree (no person row, no account) submit memories to one
+# specific book. Everything they submit sits as 'pending' until an admin
+# approves it, since the link could be forwarded further than intended.
+# ---------------------------------------------------------------------------
+
+@app.route("/books/<int:book_id>/invites", methods=["GET", "POST"])
+@require_admin
+def book_invites(book_id):
+    db = get_db()
+    book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        return "Book not found", 404
+
+    if request.method == "POST":
+        contributor_name = request.form.get("contributor_name", "").strip()
+        if not contributor_name:
+            flash("Enter a name for this invite before creating it.")
+        else:
+            token = secrets.token_urlsafe(24)
+            db.execute(
+                "INSERT INTO book_invites (book_project_id, contributor_name, token, created_by)"
+                " VALUES (?, ?, ?, ?)",
+                (book_id, contributor_name, token, session["person_id"]),
+            )
+            db.commit()
+            flash(f"Invite link created for {contributor_name}.")
+        return redirect(url_for("book_invites", book_id=book_id))
+
+    invites = db.execute(
+        "SELECT * FROM book_invites WHERE book_project_id = ? ORDER BY created_at DESC", (book_id,)
+    ).fetchall()
+    return render_template("book_invites.html", book=book, invites=invites)
+
+
+@app.route("/books/<int:book_id>/invites/<int:invite_id>/revoke", methods=["POST"])
+@require_admin
+def revoke_book_invite(book_id, invite_id):
+    db = get_db()
+    db.execute(
+        "UPDATE book_invites SET revoked_at = datetime('now') WHERE id = ? AND book_project_id = ?",
+        (invite_id, book_id),
+    )
+    db.commit()
+    flash("Invite link revoked — it will no longer work.")
+    return redirect(url_for("book_invites", book_id=book_id))
+
+
+@app.route("/contribute/<token>", methods=["GET", "POST"])
+def guest_contribute(token):
+    db = get_db()
+    invite = db.execute("SELECT * FROM book_invites WHERE token = ?", (token,)).fetchone()
+    if invite is None or invite["revoked_at"] is not None:
+        return render_template("book_contribute_invalid.html"), 404
+
+    book = db.execute(
+        "SELECT * FROM book_projects WHERE id = ?", (invite["book_project_id"],)
+    ).fetchone()
+
+    if request.method == "POST":
+        memory_text = request.form.get("memory_text", "").strip()
+        photo_filename = save_photo_upload(request.files.get("photo"))
+        video_filename = save_video_upload(request.files.get("video"))
+
+        if not memory_text and not photo_filename and not video_filename:
+            flash("Add a memory, a photo, or a video before submitting.")
+            return redirect(url_for("guest_contribute", token=token))
+
+        db.execute(
+            """
+            INSERT INTO book_guest_contributions
+                (book_project_id, invite_id, memory_text, photo_filename, video_filename)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (invite["book_project_id"], invite["id"], memory_text or None, photo_filename, video_filename),
+        )
+        db.commit()
+        flash("Thank you — your memory has been sent to the family for review.")
+        return redirect(url_for("guest_contribute", token=token))
+
+    return render_template("book_contribute.html", book=book, invite=invite)
+
+
+@app.route("/books/<int:book_id>/guest/<int:contribution_id>/approve", methods=["POST"])
+@require_admin
+def approve_guest_contribution(book_id, contribution_id):
+    db = get_db()
+    db.execute(
+        """
+        UPDATE book_guest_contributions SET status = 'approved', reviewed_at = datetime('now'), reviewed_by = ?
+        WHERE id = ? AND book_project_id = ?
+        """,
+        (session["person_id"], contribution_id, book_id),
+    )
+    db.commit()
+    flash("Contribution approved — it's now visible in the book.")
+    return redirect(url_for("show_book", book_id=book_id))
+
+
+@app.route("/books/<int:book_id>/guest/<int:contribution_id>/reject", methods=["POST"])
+@require_admin
+def reject_guest_contribution(book_id, contribution_id):
+    db = get_db()
+    db.execute(
+        """
+        UPDATE book_guest_contributions SET status = 'rejected', reviewed_at = datetime('now'), reviewed_by = ?
+        WHERE id = ? AND book_project_id = ?
+        """,
+        (session["person_id"], contribution_id, book_id),
+    )
+    db.commit()
+    flash("Contribution rejected.")
+    return redirect(url_for("show_book", book_id=book_id))
 
 
 if not DATABASE.exists():

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Add a Memory — {{ book['title'] }} — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header hero-header">
+    <img src="{{ url_for('static', filename='logo-full.png') }}" alt="Anvay — Stories, Roots, Legacy" class="hero-logo">
+  </div>
+
+  <div class="home-intro">
+    <p>
+      You've been invited to add a memory to <strong>{{ book['title'] }}</strong>,
+      a Legacy Book being put together by their family.
+    </p>
+    <p>Contributing as <em>{{ invite['contributor_name'] }}</em>.</p>
+  </div>
+
+  <section class="relation-section">
+    <form class="entry-form" method="post" enctype="multipart/form-data"
+      action="{{ url_for('guest_contribute', token=invite['token']) }}">
+
+      <label for="memory_text">Share a memory <span class="hint">(a story, something they said, anything you'd like the family to have)</span></label>
+      <textarea id="memory_text" name="memory_text" rows="8" placeholder="Write as much or as little as you'd like…"></textarea>
+
+      <label for="photo">Photo <span class="hint">(optional)</span></label>
+      <input type="file" id="photo" name="photo" accept="image/png,image/jpeg,image/gif,image/webp">
+
+      <label for="video">Video <span class="hint">(optional)</span></label>
+      <input type="file" id="video" name="video" accept="video/mp4,video/quicktime,video/x-m4v,video/avi,video/webm">
+
+      <div class="form-actions">
+        <button type="submit" class="button">Share this memory</button>
+      </div>
+    </form>
+  </section>
+
+  <p class="hint">
+    An admin from the family will review this before it's added to the book —
+    it may take a little while to appear.
+  </p>
+
+{% endblock %}
