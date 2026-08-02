@@ -1,0 +1,14 @@
+{
+  "name": "Anvay",
+  "short_name": "Anvay",
+  "description": "A private home for your family's stories, roots, and legacy.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdf3ec",
+  "theme_color": "#0b1d33",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

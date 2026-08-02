@@ -305,6 +305,23 @@ an actual compiled, readable book (using AI to weave the video interviews
 and answers into flowing chapters) and a proper reading/print view are
 still to come.
 
+## Installing it like an app on a phone
+
+Anvay isn't in the App Store or Play Store, but it can still sit on
+someone's home screen with its own icon and open full-screen, no
+address bar — Google/Apple's technical name for this is a "PWA," but it
+just means a website that offers to install itself.
+
+- **iPhone (Safari)**: open the site, tap the **Share** button, then
+  **"Add to Home Screen."**
+- **Android (Chrome)**: open the site, tap the **⋮** menu in the top
+  right, then **"Add to Home Screen"** or **"Install app."**
+
+Once added, tapping that icon opens Anvay exactly like any other app —
+no browser bar, no needing to remember a web address. Combined with the
+year-long login (see "Logging in" above), day-to-day use should feel
+like a normal app: tap the icon, already logged in, add a photo.
+
 ## Deploying so the family can access it remotely
 
 Running it locally (above) is still the easiest way to develop or test

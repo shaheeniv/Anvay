@@ -8,8 +8,21 @@
   <link rel="icon" type="image/png" sizes="180x180" href="{{ url_for('static', filename='favicon-180.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon-180.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- Lets phones offer "Add to Home Screen" as a real, full-screen app
+       icon instead of a browser bookmark. -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#0b1d33">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Anvay">
 </head>
 <body>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}");
+    }
+  </script>
   <div class="corner-motif corner-motif--tl" aria-hidden="true"></div>
   <div class="corner-motif corner-motif--tr" aria-hidden="true"></div>
   <div class="corner-motif corner-motif--bl" aria-hidden="true"></div>
