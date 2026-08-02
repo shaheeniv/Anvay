@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Add Several Photos — Anvay{% endblock %}
+{% block content %}
+
+  <div class="page-header">
+    <h1>Add Several Photos</h1>
+  </div>
+
+  <p class="hint">
+    Pick multiple photos at once — handy when you're uploading straight
+    from your phone after an event. They'll share the same caption and
+    tagged people; each still becomes its own photo in the Contributions
+    feed, so they can be viewed, tagged, and used in Legacy Books
+    individually afterwards.
+  </p>
+
+  {% if people %}
+  <form class="entry-form" method="post" enctype="multipart/form-data" action="{{ url_for('create_photo_batch') }}">
+    <label for="photos">Photos</label>
+    <input type="file" id="photos" name="photos" accept="image/png,image/jpeg,image/gif,image/webp" multiple required>
+
+    <label for="title">Caption <span class="hint">(shared by all these photos)</span></label>
+    <input type="text" id="title" name="title" required placeholder="e.g. Diwali 2026">
+
+    <label for="author_id">Added by</label>
+    <select id="author_id" name="author_id">
+      <option value="">— choose who's adding this —</option>
+      {% for person in people %}
+        <option value="{{ person['id'] }}">{{ person['name'] }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="body">Story &amp; context <span class="hint">(optional)</span></label>
+    <textarea id="body" name="body" rows="4" placeholder="Anything you'd like to say about these photos…"></textarea>
+
+    <label>Linked family members <span class="hint">(optional — who are these about?)</span></label>
+    <div class="checkbox-list">
+      {% for person in people %}
+        <label class="checkbox-item">
+          <input type="checkbox" name="person_ids" value="{{ person['id'] }}">
+          {{ person['name'] }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="button">Upload photos</button>
+      <a class="cancel-link" href="{{ url_for('feed') }}">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+    <p class="hint">No one's in the family tree yet — <a href="{{ url_for('new_person') }}">add a person</a> first.</p>
+  {% endif %}
+
+{% endblock %}

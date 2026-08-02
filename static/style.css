@@ -315,6 +315,20 @@ h2 {
 
 .button:hover { background: var(--brown-dark); }
 
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.button-secondary {
+  background: var(--paper);
+  color: var(--brown-dark);
+  border: 1px solid var(--brown);
+}
+
+.button-secondary:hover { background: var(--cream); }
+
 .search-bar {
   display: flex;
   gap: 0.5rem;

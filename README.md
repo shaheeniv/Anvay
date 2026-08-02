@@ -52,6 +52,11 @@ Shaheeni) can create a login for someone else.
 - **Forgot a password?** There's no self-service "forgot password" yet
   (that needs email-sending, which isn't set up) — an admin resets it
   from that person's profile page's "Edit login" button.
+- **Staying logged in**: once someone logs in, their session lasts a
+  year before they'd need to log in again — good for a personal phone
+  or laptop that stays theirs, since nobody wants to keep re-entering a
+  password just to add a photo. Logging out clears it immediately if
+  needed (e.g. on a shared device).
 
 ### Resetting a password by hand
 
@@ -199,6 +204,13 @@ keep locally), who added it, and which family member(s) it's about.
 Filter the feed by type using the pills at the top — the "Photo"
 filter shows a proper gallery grid instead of a list. Anything tagged
 to a person also shows up on their profile page.
+
+Uploading photos from a phone one at a time gets tedious after an
+event with lots of them, so **"+ Add several photos"** lets you pick
+multiple photos in one go — they share a single caption, story, and
+tagged people, but each still lands in the feed as its own separate
+photo (so they can be viewed, tagged, and used in Legacy Books
+individually afterwards, exactly as if they'd been added one by one).
 
 ## Time capsule letters
 

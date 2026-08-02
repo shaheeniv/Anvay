@@ -4,7 +4,10 @@
 
   <div class="page-header">
     <h1>Contributions</h1>
-    <a class="button" href="{{ url_for('new_contribution') }}">+ Add a contribution</a>
+    <div class="page-header-actions">
+      <a class="button" href="{{ url_for('new_contribution') }}">+ Add a contribution</a>
+      <a class="button button-secondary" href="{{ url_for('new_photo_batch') }}">+ Add several photos</a>
+    </div>
   </div>
 
   <div class="kind-filter">

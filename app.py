@@ -17,7 +17,7 @@ import secrets
 import sqlite3
 import uuid
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -77,6 +77,11 @@ def _load_or_create_secret_key():
 app = Flask(__name__)
 app.secret_key = _load_or_create_secret_key()
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB per upload — covers full video files
+# Family members use this from their own phones over long stretches of
+# time, not a shared kiosk — a short-lived session would mean repeatedly
+# logging back in just to add a photo. A year-long session is a much
+# better match for that "personal device" usage pattern.
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
 
 
 def get_db():
@@ -173,6 +178,7 @@ def login():
         return render_template("login.html"), 401
 
     session.clear()
+    session.permanent = True
     session["person_id"] = account["person_id"]
     return redirect(url_for("home"))
 
@@ -1256,6 +1262,47 @@ def create_contribution():
     person_ids = [int(pid) for pid in request.form.getlist("person_ids")]
     set_linked_people(contribution_id, person_ids)
     return redirect(url_for("show_contribution", contribution_id=contribution_id))
+
+
+@app.route("/feed/new-batch")
+def new_photo_batch():
+    people = visible_people()
+    return render_template("contribution_batch_form.html", people=people)
+
+
+@app.route("/feed/batch", methods=["POST"])
+def create_photo_batch():
+    """Uploads several photos at once, sharing one caption/story/tagging
+    across all of them — each still becomes its own ordinary Contribution
+    row underneath, so per-photo pages, Legacy Book photo selection, etc.
+    all keep working exactly as if they'd been added one at a time."""
+    db = get_db()
+    files = [f for f in request.files.getlist("photos") if f and f.filename]
+    if not files:
+        flash("Choose at least one photo to upload.")
+        return redirect(url_for("new_photo_batch"))
+
+    title = request.form["title"].strip()
+    body = request.form.get("body", "").strip()
+    author_id = request.form.get("author_id") or None
+    person_ids = [int(pid) for pid in request.form.getlist("person_ids")]
+
+    saved_count = 0
+    for file_storage in files:
+        photo_filename = save_photo_upload(file_storage)
+        if photo_filename is None:
+            continue
+        cur = db.execute(
+            "INSERT INTO contributions (kind, title, body, photo_filename, author_id) VALUES ('photo', ?, ?, ?, ?)",
+            (title, body, photo_filename, author_id),
+        )
+        set_linked_people(cur.lastrowid, person_ids)
+        saved_count += 1
+    db.commit()
+
+    if saved_count:
+        flash(f"Added {saved_count} photo{'s' if saved_count != 1 else ''}.")
+    return redirect(url_for("feed", kind="photo"))
 
 
 @app.route("/feed/<int:contribution_id>")
