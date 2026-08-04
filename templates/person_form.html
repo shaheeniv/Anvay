@@ -64,6 +64,11 @@
       placeholder="e.g. Vekaria Family"
       value="{{ (person['family_name'] or '') if person else '' }}">
 
+    {% if not person and current_person and current_person['is_admin'] %}
+      <label for="email">Invite them to Anvay <span class="hint">(optional — email address; they'll get a link to set up their own login)</span></label>
+      <input type="email" id="email" name="email" placeholder="their@email.com">
+    {% endif %}
+
     <div class="form-actions">
       <button type="submit" class="button">{% if person %}Save changes{% else %}Save person{% endif %}</button>
       <a class="cancel-link" href="{% if person %}{{ url_for('show_person', person_id=person['id']) }}{% else %}{{ url_for('tree') }}{% endif %}">Cancel</a>

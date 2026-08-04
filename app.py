@@ -174,15 +174,15 @@ def create_password_reset_token(account_id):
     return token
 
 
-def send_account_login_email(account, person_name, purpose):
+def send_account_login_email(account, purpose):
     """purpose is 'setup' (brand-new account, no password yet) or 'reset'
     (existing account, they forgot their password) — same token mechanism
     underneath, just different wording."""
     token = create_password_reset_token(account["id"])
     link = url_for("reset_password", token=token, _external=True)
     if purpose == "setup":
-        subject = "Set up your Anvay login"
-        intro = f"You've been added to Anvay, {person_name}'s family archive."
+        subject = "You've been added to Anvay"
+        intro = "You've been added to Anvay, a private place for your family's stories, photos, and memories. Set up a password to log in and take a look."
         cta = "Set your password"
     else:
         subject = "Reset your Anvay password"
@@ -284,7 +284,7 @@ def forgot_password():
     # registered is its own small information leak, not worth it.
     if account is not None:
         person = db.execute("SELECT * FROM people WHERE id = ?", (account["person_id"],)).fetchone()
-        send_account_login_email(account, person["name"], purpose="reset")
+        send_account_login_email(account, purpose="reset")
     flash("If that matched an account, a reset link is on its way.")
     return redirect(url_for("login"))
 
@@ -710,6 +710,30 @@ def create_person():
     new_id = cur.lastrowid
     db.commit()
 
+    # Admins can optionally invite the new person by email right here,
+    # instead of doing it as a separate step from their profile page —
+    # deliberately admin-only, same as every other way of creating a
+    # login, even though adding a person itself isn't admin-gated.
+    email = request.form.get("email", "").strip()
+    viewer = current_person()
+    if email and viewer and viewer["is_admin"]:
+        name = request.form["name"].strip()
+        if db.execute("SELECT 1 FROM accounts WHERE email = ?", (email,)).fetchone():
+            flash(f'{name} was added, but a login wasn\'t sent — an account already exists with the email "{email}".')
+        else:
+            password_hash = generate_password_hash(secrets.token_urlsafe(32), method="pbkdf2:sha256")
+            db.execute(
+                "INSERT INTO accounts (person_id, password_hash, email, is_admin) VALUES (?, ?, ?, 0)",
+                (new_id, password_hash, email),
+            )
+            db.commit()
+            account = db.execute("SELECT * FROM accounts WHERE person_id = ?", (new_id,)).fetchone()
+            sent, error = send_account_login_email(account, purpose="setup")
+            if sent:
+                flash(f"{name} was added, and a setup email was sent to {email}.")
+            else:
+                flash(f"{name} was added, but the setup email failed to send: {error}")
+
     if as_child_of:
         add_relationship(as_child_of, "child", new_id, None)
         return redirect(url_for("show_person", person_id=as_child_of))
@@ -858,7 +882,7 @@ def new_account(person_id):
 
     if not password:
         account = db.execute("SELECT * FROM accounts WHERE id = ?", (cur.lastrowid,)).fetchone()
-        sent, error = send_account_login_email(account, person["name"], purpose="setup")
+        sent, error = send_account_login_email(account, purpose="setup")
         if sent:
             flash(f"Login created for {person['name']} — a setup email was sent to {email}.")
         else:
@@ -925,7 +949,7 @@ def send_login_email(person_id):
         flash("Add an email address for this login first, then save, before sending a link.")
         return redirect(url_for("edit_account", person_id=person_id))
 
-    sent, error = send_account_login_email(account, person["name"], purpose="reset")
+    sent, error = send_account_login_email(account, purpose="reset")
     if sent:
         flash(f"A login link was emailed to {account['email']}.")
     else:

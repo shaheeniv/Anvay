@@ -170,6 +170,14 @@ mistake with no link to the rest of the family. The only exception is
 the very first person ever added to an empty tree, since there's
 nobody to connect them to yet.
 
+When an **admin** adds a new person, an extra "Invite them to Anvay"
+field appears — enter their email and they'll get the same "you've
+been added" setup email described under "Logging in," without needing
+a separate trip to their profile page afterward. Leave it blank to
+just add them to the tree with no login, same as before. Non-admins
+adding a person don't see this field at all — creating a real login is
+still admin-only, even though adding a person to the tree isn't.
+
 If the family has more than one distinct branch with no common
 ancestor recorded (e.g. your mum's side and your dad's side, before
 they married each other), pill buttons appear above the tree so you
