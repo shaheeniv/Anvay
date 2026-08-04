@@ -11,7 +11,7 @@ or laptop (see "Deploying so the family can access it remotely"). Either
 way, the data is stored in a single file, `archive.db`, which you can
 back up just by copying it.
 
-Everyone now needs a username and password to get in — see "Logging in"
+Everyone now needs an email and password to get in — see "Logging in"
 below.
 
 ## How to run it locally
@@ -35,27 +35,27 @@ To stop the site, go back to Terminal and press `Control + C`.
 
 ## Logging in
 
-The site now requires a username and password — this became necessary
+The site now requires an email and password — this became necessary
 once family members can reach it remotely, not just from one shared
 computer. There's no public sign-up: only an admin (currently just
-Shaheeni) can create a login for someone else.
+Shaheeni) can create a login for someone else. There are no usernames —
+email is the only way to log in, so every login needs a real, unique
+email address on file.
 
 - **Shaheeni's own account** was created automatically when this feature
-  shipped, username `shaheeni`. If you don't already have the password,
-  ask whoever set this up, or reset it directly in the database (see
-  "Resetting a password by hand" below).
+  shipped. If you don't already have the password, ask whoever set this
+  up, or reset it directly in the database (see "Resetting a password by
+  hand" below).
 - **To give someone else a login**: go to their profile page (Family
-  Tree → click their name) and click "Set up login" — pick a username
-  and enter their **email address**. They'll get an email with a link
-  to set their own password — nobody has to invent or share a starting
-  password. If they don't have an email (e.g. a young child), leave
-  the email blank and set a starting password directly instead, the
-  old way.
+  Tree → click their name) and click "Set up login" — enter their
+  **email address**, and leave the password blank. They'll get an email
+  with a link to set their own password — nobody has to invent or share
+  a starting password. You can still set a starting password yourself
+  instead by filling it in, but an email is always required either way.
 - **Forgot a password?** Anyone can click "Forgot your password?" on
-  the login page and enter their username or email — if there's an
-  email on file, they'll get a reset link themselves, no admin needed.
-  An admin can also trigger this for someone from their "Edit login"
-  page ("Email \[name\] a login link").
+  the login page and enter their email — they'll get a reset link
+  themselves, no admin needed. An admin can also trigger this for
+  someone from their "Edit login" page ("Email \[name\] a login link").
 - **Sending these emails** needs a [Resend](https://resend.com) account
   (free tier) with `anvay.uk` verified as a sending domain, and its API
   key set as the `RESEND_API_KEY` environment variable on Render. Without
@@ -85,7 +85,7 @@ print(generate_password_hash('your-new-password-here', method='pbkdf2:sha256'))
 Copy the long string that prints out, then:
 
 ```bash
-sqlite3 archive.db "UPDATE accounts SET password_hash = 'PASTE_THE_STRING_HERE' WHERE username = 'shaheeni';"
+sqlite3 archive.db "UPDATE accounts SET password_hash = 'PASTE_THE_STRING_HERE' WHERE email = 'shaheeniv@gmail.com';"
 ```
 
 ## Landing page

@@ -15,19 +15,15 @@
     method="post"
     action="{% if account %}{{ url_for('edit_account', person_id=person['id']) }}{% else %}{{ url_for('new_account', person_id=person['id']) }}{% endif %}"
   >
-    <label for="username">Username</label>
-    <input type="text" id="username" name="username" required autocomplete="username"
-      value="{{ account['username'] if account else '' }}">
-
-    <label for="email">Email <span class="hint">({% if account %}optional{% else %}recommended — they'll set their own password by email instead of you picking one{% endif %})</span></label>
-    <input type="email" id="email" name="email" autocomplete="email"
+    <label for="email">Email <span class="hint">(this is how they log in)</span></label>
+    <input type="email" id="email" name="email" required autocomplete="email"
       value="{{ account['email'] if account and account['email'] else '' }}">
 
     <label for="password">
       {% if account %}
         New password <span class="hint">(leave blank to keep the current one)</span>
       {% else %}
-        Password <span class="hint">(only needed if you're not giving an email above)</span>
+        Password <span class="hint">(leave blank to email them a link to set their own instead)</span>
       {% endif %}
     </label>
     <input type="password" id="password" name="password" autocomplete="new-password">

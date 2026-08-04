@@ -217,7 +217,7 @@ def current_person():
     db = get_db()
     return db.execute(
         """
-        SELECT people.*, accounts.username, accounts.is_admin
+        SELECT people.*, accounts.email, accounts.is_admin
         FROM people
         JOIN accounts ON accounts.person_id = people.id
         WHERE people.id = ?
@@ -250,14 +250,14 @@ def login():
         return render_template("login.html")
 
     db = get_db()
-    username = request.form.get("username", "").strip()
+    email = request.form.get("email", "").strip()
     password = request.form.get("password", "")
     account = db.execute(
-        "SELECT * FROM accounts WHERE username = ?", (username,)
+        "SELECT * FROM accounts WHERE email = ?", (email,)
     ).fetchone()
 
     if account is None or not check_password_hash(account["password_hash"], password):
-        flash("Incorrect username or password.")
+        flash("Incorrect email or password.")
         return render_template("login.html"), 401
 
     session.clear()
@@ -278,16 +278,14 @@ def forgot_password():
         return render_template("forgot_password.html")
 
     db = get_db()
-    identifier = request.form.get("identifier", "").strip()
-    account = db.execute(
-        "SELECT * FROM accounts WHERE username = ? OR email = ?", (identifier, identifier)
-    ).fetchone()
-    # Same message either way — confirming or denying that a username/email
-    # exists in the system is its own small information leak, not worth it.
-    if account is not None and account["email"]:
+    email = request.form.get("email", "").strip()
+    account = db.execute("SELECT * FROM accounts WHERE email = ?", (email,)).fetchone()
+    # Same message either way — confirming or denying that an email is
+    # registered is its own small information leak, not worth it.
+    if account is not None:
         person = db.execute("SELECT * FROM people WHERE id = ?", (account["person_id"],)).fetchone()
         send_account_login_email(account, person["name"], purpose="reset")
-    flash("If that matched an account with an email on file, a reset link is on its way.")
+    flash("If that matched an account, a reset link is on its way.")
     return redirect(url_for("login"))
 
 
@@ -828,39 +826,37 @@ def new_account(person_id):
     if request.method == "GET":
         return render_template("account_form.html", person=person, account=None, error=None)
 
-    username = request.form.get("username", "").strip()
     email = request.form.get("email", "").strip()
     password = request.form.get("password", "")
     is_admin = 1 if request.form.get("is_admin") else 0
 
-    if not username or not (email or password):
+    if not email:
         return render_template(
             "account_form.html", person=person, account=None,
-            error="Username is required, plus either an email (to send them a setup link) or a password you set yourself.",
+            error="An email address is required — it's how they log in.",
         )
-    if db.execute("SELECT 1 FROM accounts WHERE username = ?", (username,)).fetchone():
+    if db.execute("SELECT 1 FROM accounts WHERE email = ?", (email,)).fetchone():
         return render_template(
             "account_form.html", person=person, account=None,
-            error=f'The username "{username}" is already taken.',
+            error=f'An account already exists with the email "{email}".',
         )
 
-    # With an email on file, they set their own password via an emailed
-    # link — this placeholder hash matches no real password, so login
-    # stays blocked until they complete that. Without an email (e.g. a
-    # child with no address of their own), the admin sets a starting
-    # password directly, same as before.
-    if email:
-        password_hash = generate_password_hash(secrets.token_urlsafe(32), method="pbkdf2:sha256")
-    else:
+    # Leaving the password blank sends them a link to set their own —
+    # the placeholder hash below matches no real password, so login
+    # stays blocked until they complete that. Filling it in sets a
+    # starting password directly instead, same as before.
+    if password:
         password_hash = generate_password_hash(password, method="pbkdf2:sha256")
+    else:
+        password_hash = generate_password_hash(secrets.token_urlsafe(32), method="pbkdf2:sha256")
 
     cur = db.execute(
-        "INSERT INTO accounts (person_id, username, password_hash, email, is_admin) VALUES (?, ?, ?, ?, ?)",
-        (person_id, username, password_hash, email or None, is_admin),
+        "INSERT INTO accounts (person_id, password_hash, email, is_admin) VALUES (?, ?, ?, ?)",
+        (person_id, password_hash, email, is_admin),
     )
     db.commit()
 
-    if email:
+    if not password:
         account = db.execute("SELECT * FROM accounts WHERE id = ?", (cur.lastrowid,)).fetchone()
         sent, error = send_account_login_email(account, person["name"], purpose="setup")
         if sent:
@@ -884,34 +880,33 @@ def edit_account(person_id):
     if request.method == "GET":
         return render_template("account_form.html", person=person, account=account, error=None)
 
-    username = request.form.get("username", "").strip()
     email = request.form.get("email", "").strip()
     new_password = request.form.get("password", "")
     is_admin = 1 if request.form.get("is_admin") else 0
 
-    if not username:
+    if not email:
         return render_template(
             "account_form.html", person=person, account=account,
-            error="Username is required.",
+            error="Email is required — it's how they log in.",
         )
     clash = db.execute(
-        "SELECT 1 FROM accounts WHERE username = ? AND person_id != ?", (username, person_id)
+        "SELECT 1 FROM accounts WHERE email = ? AND person_id != ?", (email, person_id)
     ).fetchone()
     if clash:
         return render_template(
             "account_form.html", person=person, account=account,
-            error=f'The username "{username}" is already taken.',
+            error=f'Another account already uses the email "{email}".',
         )
 
     if new_password:
         db.execute(
-            "UPDATE accounts SET username = ?, email = ?, password_hash = ?, is_admin = ? WHERE person_id = ?",
-            (username, email or None, generate_password_hash(new_password, method="pbkdf2:sha256"), is_admin, person_id),
+            "UPDATE accounts SET email = ?, password_hash = ?, is_admin = ? WHERE person_id = ?",
+            (email, generate_password_hash(new_password, method="pbkdf2:sha256"), is_admin, person_id),
         )
     else:
         db.execute(
-            "UPDATE accounts SET username = ?, email = ?, is_admin = ? WHERE person_id = ?",
-            (username, email or None, is_admin, person_id),
+            "UPDATE accounts SET email = ?, is_admin = ? WHERE person_id = ?",
+            (email, is_admin, person_id),
         )
     db.commit()
     flash(f"Login details updated for {person['name']}.")

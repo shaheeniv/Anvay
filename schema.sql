@@ -85,12 +85,19 @@ CREATE TABLE IF NOT EXISTS contribution_people (
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     person_id INTEGER NOT NULL UNIQUE REFERENCES people(id) ON DELETE CASCADE,
-    username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     email TEXT,
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Email is the login identifier now (usernames are gone) but the column
+-- stays nullable at the DB level -- some accounts predate this change and
+-- a hard NOT NULL migration risks breaking them. A partial unique index
+-- (skipping NULLs) still enforces "no two accounts share an email"
+-- without that risk. Enforcing "every new account has one" is done in
+-- the application layer instead (new_account()), not here.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email) WHERE email IS NOT NULL;
 
 -- A single-use, expiring link emailed to someone to either set their
 -- initial password (a brand-new account has an unusable random
