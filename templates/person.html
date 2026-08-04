@@ -82,10 +82,14 @@
         {% for c in capsules %}
           <li class="entry-card">
             <a href="{{ url_for('show_capsule', capsule_id=c['id']) }}">
-              {% if is_unlocked(c['unlock_date']) %}
+              {% if is_unlocked(c['unlock_date']) and can_open_capsule(c, viewer) %}
                 <span class="kind-badge kind-unlocked">Unlocked</span>
                 <span class="entry-person">{{ c['title'] }}</span>
                 <span class="entry-date">unlocked {{ c['unlock_date'] }}</span>
+              {% elif is_unlocked(c['unlock_date']) %}
+                <span class="kind-badge kind-unlocked">Unlocked</span>
+                <span class="entry-person">A letter to {{ person['name'] }}</span>
+                <span class="entry-date">private</span>
               {% else %}
                 <span class="kind-badge kind-sealed">Sealed</span>
                 <span class="entry-person">A sealed letter</span>

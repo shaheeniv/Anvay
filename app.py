@@ -832,6 +832,8 @@ def show_person(person_id):
         capsules=capsule_rows,
         is_unlocked=is_unlocked,
         describe_time_until=describe_time_until,
+        can_open_capsule=can_open_capsule,
+        viewer=current_person(),
         account=account,
     )
 
@@ -1599,6 +1601,18 @@ def is_unlocked(unlock_date_str):
     return date.today().isoformat() >= unlock_date_str
 
 
+def can_open_capsule(capsule, viewer):
+    """Even once unlocked, a letter's contents are private to whoever it
+    was written to and whoever wrote it — everyone else who can otherwise
+    see it (same branch) only sees that it exists. Admins bypass this,
+    same as every other visibility rule in the app."""
+    if viewer is None:
+        return False
+    if viewer["is_admin"]:
+        return True
+    return viewer["id"] in (capsule["recipient_id"], capsule["author_id"])
+
+
 def describe_time_until(unlock_date_str):
     days = (date.fromisoformat(unlock_date_str) - date.today()).days
     if days <= 0:
@@ -1628,8 +1642,10 @@ def capsules():
         key=lambda r: r["unlock_date"],
         reverse=True,
     )
+    viewer = current_person()
     return render_template(
-        "capsules.html", sealed=sealed, unlocked=unlocked, describe_time_until=describe_time_until
+        "capsules.html", sealed=sealed, unlocked=unlocked, describe_time_until=describe_time_until,
+        can_open_capsule=can_open_capsule, viewer=viewer,
     )
 
 
@@ -1672,8 +1688,9 @@ def show_capsule(capsule_id):
     if visible_ids is not None and capsule_id not in visible_capsule_ids(visible_ids):
         return "Letter not found", 404
     unlocked = is_unlocked(capsule["unlock_date"])
+    can_open = can_open_capsule(capsule, current_person())
     return render_template(
-        "capsule.html", capsule=capsule, unlocked=unlocked,
+        "capsule.html", capsule=capsule, unlocked=unlocked, can_open=can_open,
         describe_time_until=describe_time_until,
     )
 
@@ -1687,6 +1704,9 @@ def edit_capsule(capsule_id):
     if not is_unlocked(capsule["unlock_date"]):
         flash("This letter is sealed and can't be edited until it unlocks — delete and rewrite it if you need to change something.")
         return redirect(url_for("show_capsule", capsule_id=capsule_id))
+    if not can_open_capsule(capsule, current_person()):
+        flash("Only the recipient or the person who wrote this letter can edit it.")
+        return redirect(url_for("show_capsule", capsule_id=capsule_id))
     people = visible_people()
     return render_template(
         "capsule_form.html", capsule=capsule, people=people, preselect_recipient_id=None
@@ -1697,12 +1717,15 @@ def edit_capsule(capsule_id):
 def update_capsule(capsule_id):
     db = get_db()
     existing = db.execute(
-        "SELECT unlock_date FROM time_capsules WHERE id = ?", (capsule_id,)
+        "SELECT recipient_id, author_id, unlock_date FROM time_capsules WHERE id = ?", (capsule_id,)
     ).fetchone()
     if existing is None:
         return "Letter not found", 404
     if not is_unlocked(existing["unlock_date"]):
         flash("This letter is sealed and can't be edited until it unlocks.")
+        return redirect(url_for("show_capsule", capsule_id=capsule_id))
+    if not can_open_capsule(existing, current_person()):
+        flash("Only the recipient or the person who wrote this letter can edit it.")
         return redirect(url_for("show_capsule", capsule_id=capsule_id))
     db.execute(
         """

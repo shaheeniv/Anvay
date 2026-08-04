@@ -239,11 +239,17 @@ recipient's profile only show who it's for and roughly how long until
 it unlocks. A sealed letter also can't be edited (delete and rewrite
 it if you need to change something before it opens).
 
-Worth knowing: the seal is enforced by the app for everyone (including
-whoever wrote the letter) until the unlock date, but it's not
-encryption — anyone with direct access to the `archive.db` file itself
-could technically read the raw text early. It's there to stop casual
-peeking within the app, not a determined look at the database file.
+**Once unlocked, the letter still stays private** — only the recipient
+and whoever wrote it can actually open and read it (or edit it).
+Everyone else who could otherwise see it (same family branch) only
+ever sees that a letter exists and who it's addressed to, both before
+and after it unlocks — never the title or contents. Admins can open
+any letter, same as they can see everything else in the app.
+
+Worth knowing: this privacy is enforced by the app, not encryption —
+anyone with direct access to the `archive.db` file itself could
+technically read the raw text. It's there to stop casual peeking
+within the app, not a determined look at the database file.
 
 ## Backing up / exporting your data
 

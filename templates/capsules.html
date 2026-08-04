@@ -40,7 +40,11 @@
           <li class="entry-card">
             <a href="{{ url_for('show_capsule', capsule_id=c['id']) }}">
               <span class="kind-badge kind-unlocked">Unlocked</span>
-              <span class="entry-person">{{ c['title'] }}</span>
+              {% if can_open_capsule(c, viewer) %}
+                <span class="entry-person">{{ c['title'] }}</span>
+              {% else %}
+                <span class="entry-person">A letter to {{ c['recipient_name'] }}</span>
+              {% endif %}
               <span class="entry-date">To {{ c['recipient_name'] }} · unlocked {{ c['unlock_date'] }}</span>
             </a>
           </li>

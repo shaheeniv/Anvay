@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{% if unlocked %}{{ capsule['title'] }}{% else %}Sealed Letter{% endif %} — Anvay{% endblock %}
+{% block title %}{% if can_open %}{{ capsule['title'] }}{% else %}A Letter to {{ capsule['recipient_name'] }}{% endif %} — Anvay{% endblock %}
 {% block content %}
 
-  {% if unlocked %}
+  {% if unlocked and can_open %}
     <div class="page-header">
       <div>
         <span class="kind-badge kind-unlocked">Unlocked</span>
@@ -20,6 +20,19 @@
     <div class="transcript-block letter-body">
       <p class="transcript-text">{{ capsule['body'] }}</p>
     </div>
+  {% elif unlocked %}
+    <div class="page-header">
+      <div>
+        <span class="kind-badge kind-unlocked">Unlocked</span>
+        <h1>A letter to {{ capsule['recipient_name'] }}</h1>
+        <p class="entry-meta">unlocked {{ capsule['unlock_date'] }}</p>
+      </div>
+    </div>
+
+    <p class="empty-state">
+      This letter is private to {{ capsule['recipient_name'] }}{% if capsule['author_name'] %} and {{ capsule['author_name'] }}{% endif %} —
+      you can see that it exists, but only they can open it.
+    </p>
   {% else %}
     <div class="page-header">
       <div>
