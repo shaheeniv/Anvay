@@ -87,8 +87,22 @@ CREATE TABLE IF NOT EXISTS accounts (
     person_id INTEGER NOT NULL UNIQUE REFERENCES people(id) ON DELETE CASCADE,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    email TEXT,
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- A single-use, expiring link emailed to someone to either set their
+-- initial password (a brand-new account has an unusable random
+-- placeholder password_hash until this completes) or reset a forgotten
+-- one -- both are the same underlying action, so one table covers both.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    used_at TEXT
 );
 
 -- Letters written now, addressed to someone, hidden until unlock_date passes.

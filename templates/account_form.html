@@ -19,8 +19,18 @@
     <input type="text" id="username" name="username" required autocomplete="username"
       value="{{ account['username'] if account else '' }}">
 
-    <label for="password">{% if account %}New password <span class="hint">(leave blank to keep the current one)</span>{% else %}Password{% endif %}</label>
-    <input type="password" id="password" name="password" {% if not account %}required{% endif %} autocomplete="new-password">
+    <label for="email">Email <span class="hint">({% if account %}optional{% else %}recommended — they'll set their own password by email instead of you picking one{% endif %})</span></label>
+    <input type="email" id="email" name="email" autocomplete="email"
+      value="{{ account['email'] if account and account['email'] else '' }}">
+
+    <label for="password">
+      {% if account %}
+        New password <span class="hint">(leave blank to keep the current one)</span>
+      {% else %}
+        Password <span class="hint">(only needed if you're not giving an email above)</span>
+      {% endif %}
+    </label>
+    <input type="password" id="password" name="password" autocomplete="new-password">
 
     <div class="checkbox-list">
       <label class="checkbox-item">
@@ -34,5 +44,11 @@
       <a class="cancel-link" href="{{ url_for('show_person', person_id=person['id']) }}">Cancel</a>
     </div>
   </form>
+
+  {% if account and account['email'] %}
+    <form method="post" action="{{ url_for('send_login_email', person_id=person['id']) }}" class="inline-remove">
+      <button type="submit" class="small-button">Email {{ person['name'] }} a login link &rarr;</button>
+    </form>
+  {% endif %}
 
 {% endblock %}

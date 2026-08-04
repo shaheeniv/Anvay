@@ -12,12 +12,15 @@ Run it with: python3 app.py   (or double-click "Open Anvay.command")
 Then open: http://127.0.0.1:5000
 """
 
+import json
 import os
 import secrets
 import sqlite3
+import urllib.error
+import urllib.request
 import uuid
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -42,6 +45,10 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 VIDEO_DIR = DATA_DIR / "videos"
 ALLOWED_PHOTO_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 ALLOWED_VIDEO_EXTENSIONS = {"mp4", "mov", "m4v", "avi", "webm"}
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+FROM_EMAIL = "Anvay <login@anvay.uk>"
+RESET_TOKEN_LIFETIME_HOURS = 24
 
 CONTRIBUTION_KINDS = [
     ("memory", "Memory"),
@@ -115,7 +122,83 @@ def init_db():
 # is all real per-person login needs here. A single before_request gate
 # covers every existing route in one place instead of decorating each one.
 
-PUBLIC_ENDPOINTS = {"login", "static", "home", "guest_contribute"}
+PUBLIC_ENDPOINTS = {"login", "static", "home", "guest_contribute", "forgot_password", "reset_password"}
+
+
+def send_email(to_email, subject, html_body):
+    """Sends one email via Resend's HTTP API using only the standard
+    library (no extra dependency for one API call). Returns (True, None)
+    on success or (False, error_message) — callers decide how to surface
+    a failure, since this shouldn't ever crash a request."""
+    if not RESEND_API_KEY:
+        return False, "Email isn't set up yet (no RESEND_API_KEY configured)."
+    payload = json.dumps({
+        "from": FROM_EMAIL,
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+            # Resend's API sits behind Cloudflare, which blocks Python's
+            # default urllib User-Agent ("Python-urllib/3.x") as a bot
+            # signature (HTTP 403, Cloudflare error 1010) — any normal-
+            # looking one avoids that.
+            "User-Agent": "Anvay/1.0 (+https://anvay.uk)",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            response.read()
+        return True, None
+    except urllib.error.HTTPError as e:
+        return False, f"Resend rejected the email ({e.code}): {e.read().decode('utf-8', 'replace')}"
+    except urllib.error.URLError as e:
+        return False, f"Couldn't reach Resend: {e.reason}"
+
+
+def create_password_reset_token(account_id):
+    db = get_db()
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.utcnow() + timedelta(hours=RESET_TOKEN_LIFETIME_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    db.execute(
+        "INSERT INTO password_reset_tokens (account_id, token, expires_at) VALUES (?, ?, ?)",
+        (account_id, token, expires_at),
+    )
+    db.commit()
+    return token
+
+
+def send_account_login_email(account, person_name, purpose):
+    """purpose is 'setup' (brand-new account, no password yet) or 'reset'
+    (existing account, they forgot their password) — same token mechanism
+    underneath, just different wording."""
+    token = create_password_reset_token(account["id"])
+    link = url_for("reset_password", token=token, _external=True)
+    if purpose == "setup":
+        subject = "Set up your Anvay login"
+        intro = f"You've been added to Anvay, {person_name}'s family archive."
+        cta = "Set your password"
+    else:
+        subject = "Reset your Anvay password"
+        intro = "We received a request to reset your Anvay password."
+        cta = "Choose a new password"
+    html_body = f"""
+      <p>{intro}</p>
+      <p><a href="{link}" style="background:#e9772e;color:#fff;padding:0.6rem 1.2rem;
+        border-radius:6px;text-decoration:none;display:inline-block;">{cta}</a></p>
+      <p>Or paste this link into your browser:<br>{link}</p>
+      <p style="color:#8f7364;font-size:0.9rem;">
+        This link works once and expires in {RESET_TOKEN_LIFETIME_HOURS} hours.
+        {"If you weren't expecting this, you can safely ignore this email." if purpose == "reset" else ""}
+      </p>
+    """
+    return send_email(account["email"], subject, html_body)
 
 
 @app.before_request
@@ -186,6 +269,56 @@ def login():
 @app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "GET":
+        return render_template("forgot_password.html")
+
+    db = get_db()
+    identifier = request.form.get("identifier", "").strip()
+    account = db.execute(
+        "SELECT * FROM accounts WHERE username = ? OR email = ?", (identifier, identifier)
+    ).fetchone()
+    # Same message either way — confirming or denying that a username/email
+    # exists in the system is its own small information leak, not worth it.
+    if account is not None and account["email"]:
+        person = db.execute("SELECT * FROM people WHERE id = ?", (account["person_id"],)).fetchone()
+        send_account_login_email(account, person["name"], purpose="reset")
+    flash("If that matched an account with an email on file, a reset link is on its way.")
+    return redirect(url_for("login"))
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    db = get_db()
+    token_row = db.execute(
+        "SELECT * FROM password_reset_tokens WHERE token = ?", (token,)
+    ).fetchone()
+    valid = (
+        token_row is not None
+        and token_row["used_at"] is None
+        and token_row["expires_at"] > datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    )
+    if not valid:
+        return render_template("reset_password.html", valid=False)
+
+    if request.method == "GET":
+        return render_template("reset_password.html", valid=True, error=None)
+
+    password = request.form.get("password", "")
+    if len(password) < 8:
+        return render_template("reset_password.html", valid=True, error="Password must be at least 8 characters.")
+
+    db.execute(
+        "UPDATE accounts SET password_hash = ? WHERE id = ?",
+        (generate_password_hash(password, method="pbkdf2:sha256"), token_row["account_id"]),
+    )
+    db.execute("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?", (token_row["id"],))
+    db.commit()
+    flash("Password set — you can log in now.")
     return redirect(url_for("login"))
 
 
@@ -696,13 +829,14 @@ def new_account(person_id):
         return render_template("account_form.html", person=person, account=None, error=None)
 
     username = request.form.get("username", "").strip()
+    email = request.form.get("email", "").strip()
     password = request.form.get("password", "")
     is_admin = 1 if request.form.get("is_admin") else 0
 
-    if not username or not password:
+    if not username or not (email or password):
         return render_template(
             "account_form.html", person=person, account=None,
-            error="Username and password are both required.",
+            error="Username is required, plus either an email (to send them a setup link) or a password you set yourself.",
         )
     if db.execute("SELECT 1 FROM accounts WHERE username = ?", (username,)).fetchone():
         return render_template(
@@ -710,12 +844,31 @@ def new_account(person_id):
             error=f'The username "{username}" is already taken.',
         )
 
-    db.execute(
-        "INSERT INTO accounts (person_id, username, password_hash, is_admin) VALUES (?, ?, ?, ?)",
-        (person_id, username, generate_password_hash(password, method="pbkdf2:sha256"), is_admin),
+    # With an email on file, they set their own password via an emailed
+    # link — this placeholder hash matches no real password, so login
+    # stays blocked until they complete that. Without an email (e.g. a
+    # child with no address of their own), the admin sets a starting
+    # password directly, same as before.
+    if email:
+        password_hash = generate_password_hash(secrets.token_urlsafe(32), method="pbkdf2:sha256")
+    else:
+        password_hash = generate_password_hash(password, method="pbkdf2:sha256")
+
+    cur = db.execute(
+        "INSERT INTO accounts (person_id, username, password_hash, email, is_admin) VALUES (?, ?, ?, ?, ?)",
+        (person_id, username, password_hash, email or None, is_admin),
     )
     db.commit()
-    flash(f"Login created for {person['name']}.")
+
+    if email:
+        account = db.execute("SELECT * FROM accounts WHERE id = ?", (cur.lastrowid,)).fetchone()
+        sent, error = send_account_login_email(account, person["name"], purpose="setup")
+        if sent:
+            flash(f"Login created for {person['name']} — a setup email was sent to {email}.")
+        else:
+            flash(f"Login created for {person['name']}, but the setup email failed to send: {error}")
+    else:
+        flash(f"Login created for {person['name']}.")
     return redirect(url_for("show_person", person_id=person_id))
 
 
@@ -732,6 +885,7 @@ def edit_account(person_id):
         return render_template("account_form.html", person=person, account=account, error=None)
 
     username = request.form.get("username", "").strip()
+    email = request.form.get("email", "").strip()
     new_password = request.form.get("password", "")
     is_admin = 1 if request.form.get("is_admin") else 0
 
@@ -751,17 +905,37 @@ def edit_account(person_id):
 
     if new_password:
         db.execute(
-            "UPDATE accounts SET username = ?, password_hash = ?, is_admin = ? WHERE person_id = ?",
-            (username, generate_password_hash(new_password, method="pbkdf2:sha256"), is_admin, person_id),
+            "UPDATE accounts SET username = ?, email = ?, password_hash = ?, is_admin = ? WHERE person_id = ?",
+            (username, email or None, generate_password_hash(new_password, method="pbkdf2:sha256"), is_admin, person_id),
         )
     else:
         db.execute(
-            "UPDATE accounts SET username = ?, is_admin = ? WHERE person_id = ?",
-            (username, is_admin, person_id),
+            "UPDATE accounts SET username = ?, email = ?, is_admin = ? WHERE person_id = ?",
+            (username, email or None, is_admin, person_id),
         )
     db.commit()
     flash(f"Login details updated for {person['name']}.")
     return redirect(url_for("show_person", person_id=person_id))
+
+
+@app.route("/people/<int:person_id>/account/send-login-email", methods=["POST"])
+@require_admin
+def send_login_email(person_id):
+    db = get_db()
+    person = db.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
+    account = db.execute("SELECT * FROM accounts WHERE person_id = ?", (person_id,)).fetchone()
+    if person is None or account is None:
+        return "Not found", 404
+    if not account["email"]:
+        flash("Add an email address for this login first, then save, before sending a link.")
+        return redirect(url_for("edit_account", person_id=person_id))
+
+    sent, error = send_account_login_email(account, person["name"], purpose="reset")
+    if sent:
+        flash(f"A login link was emailed to {account['email']}.")
+    else:
+        flash(f"Couldn't send that email: {error}")
+    return redirect(url_for("edit_account", person_id=person_id))
 
 
 @app.route("/people/<int:person_id>/edit")
