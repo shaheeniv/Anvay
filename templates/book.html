@@ -8,10 +8,55 @@
       <h1>{{ book['title'] }}</h1>
       <p class="entry-meta">
         {{ subjects | map(attribute='name') | join(' & ') }}
-        · {{ contributor_count }} contributor{{ 's' if contributor_count != 1 else '' }} so far
       </p>
     </div>
   </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <span class="stat-number">{{ submitted_count }}</span>
+      <span class="stat-label">answer{{ 's' if submitted_count != 1 else '' }} set{{ 's' if submitted_count != 1 else '' }} submitted</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-number">{{ photo_count }}</span>
+      <span class="stat-label">photo{{ 's' if photo_count != 1 else '' }} selected</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-number">{{ entries|length }}</span>
+      <span class="stat-label">interview{{ 's' if entries|length != 1 else '' }} logged</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-number">{{ approved_guest_contributions|length }}</span>
+      <span class="stat-label">memor{{ 'y' if approved_guest_contributions|length == 1 else 'ies' }} from friends</span>
+    </div>
+  </div>
+
+  <section class="relation-section">
+    <h2>Your questions</h2>
+    {% if current_person and current_person['is_admin'] %}
+      <a class="small-link" href="{{ url_for('edit_book_questions', book_id=book['id']) }}">Edit these questions for this book &rarr;</a>
+    {% endif %}
+    {% if not has_questions %}
+      <p class="hint">No questions available right now.</p>
+    {% elif viewer_submission %}
+      <p class="hint">
+        <span class="kind-badge kind-unlocked">Submitted</span>
+        You submitted your answers on {{ viewer_submission['submitted_at'][:10] }} — they're locked in.
+      </p>
+      <a class="small-link" href="{{ url_for('book_answer', book_id=book['id']) }}">View your answers &rarr;</a>
+    {% else %}
+      <p class="hint">
+        {% if has_draft_answers %}
+          You've started answering — pick up where you left off.
+        {% else %}
+          Answer a few questions about {{ subjects | map(attribute='name') | join(' & ') }}, in your own words.
+        {% endif %}
+      </p>
+      <a class="button" href="{{ url_for('book_answer', book_id=book['id']) }}">
+        {{ 'Continue answering' if has_draft_answers else 'Answer your questions' }} &rarr;
+      </a>
+    {% endif %}
+  </section>
 
   <section class="relation-section">
     <h2>Photos</h2>
@@ -57,6 +102,26 @@
         </ul>
       {% endif %}
     </section>
+
+    <section class="relation-section">
+      <h2>Who's submitted their answers</h2>
+      {% if submitted_people %}
+        <ul class="relation-list">
+          {% for sp in submitted_people %}
+            <li>
+              {{ sp['name'] }} <span class="hint">— submitted {{ sp['submitted_at'][:10] }}</span>
+              <form method="post" action="{{ url_for('unlock_book_answers', book_id=book['id'], person_id=sp['person_id']) }}"
+                class="inline-remove"
+                onsubmit="return confirm('Unlock these answers so they can be edited again?');">
+                <button type="submit" class="small-button small-button--danger">Unlock</button>
+              </form>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="hint">No one has submitted their answers yet.</p>
+      {% endif %}
+    </section>
   {% endif %}
 
   {% if approved_guest_contributions %}
@@ -97,108 +162,5 @@
       <p class="hint">No video interviews logged yet for {{ subjects | map(attribute='name') | join(' & ') }}.</p>
     {% endif %}
   </section>
-
-  <section class="relation-section">
-    <h2>Your questions</h2>
-    {% if current_person and current_person['is_admin'] %}
-      <a class="small-link" href="{{ url_for('edit_book_questions', book_id=book['id']) }}">Edit these questions for this book &rarr;</a>
-    {% endif %}
-    {% if questions %}
-      <form class="entry-form" method="post" action="{{ url_for('submit_book_answers', book_id=book['id']) }}">
-        {% for question in questions %}
-          <label for="question_{{ question['id'] }}">{{ question['text'] }}</label>
-          <div class="dictate-row">
-            <textarea id="question_{{ question['id'] }}" name="question_{{ question['id'] }}" rows="4"
-              >{{ existing_answers.get(question['id'], '') }}</textarea>
-            <button type="button" class="small-button dictate-button"
-              data-dictate-target="question_{{ question['id'] }}">🎤 Dictate</button>
-          </div>
-        {% endfor %}
-        <div class="form-actions">
-          <button type="submit" class="button">Save answers</button>
-        </div>
-      </form>
-    {% else %}
-      <p class="hint">No questions available right now.</p>
-    {% endif %}
-  </section>
-
-  <script>
-    // Lets someone speak an answer instead of typing it. Records audio
-    // right in the browser, then sends it to the server to be
-    // transcribed (OpenAI's Whisper) — meaningfully more accurate than
-    // relying on the browser's own built-in speech recognition,
-    // especially for accented English, at a small per-use cost.
-    (function () {
-      if (!navigator.mediaDevices || !window.MediaRecorder) {
-        document.querySelectorAll('.dictate-button').forEach(function (b) { b.style.display = 'none'; });
-        return;
-      }
-
-      document.querySelectorAll('.dictate-button').forEach(function (button) {
-        var textarea = document.getElementById(button.dataset.dictateTarget);
-        if (!textarea) return;
-
-        var mediaRecorder = null;
-        var chunks = [];
-        var recording = false;
-
-        function appendText(text) {
-          var sep = textarea.value && !/\s$/.test(textarea.value) ? ' ' : '';
-          textarea.value += sep + text;
-        }
-
-        function setIdle() {
-          recording = false;
-          button.disabled = false;
-          button.classList.remove('dictate-button--active');
-          button.textContent = '🎤 Dictate';
-        }
-
-        function sendForTranscription(blob, extension) {
-          button.disabled = true;
-          button.textContent = 'Transcribing…';
-          var formData = new FormData();
-          formData.append('audio', blob, 'dictation.' + extension);
-          fetch('{{ url_for("dictate") }}', { method: 'POST', body: formData })
-            .then(function (response) { return response.json(); })
-            .then(function (data) {
-              if (data.text) appendText(data.text);
-              if (data.error) alert(data.error);
-            })
-            .catch(function () {
-              alert('Something went wrong sending that to be transcribed.');
-            })
-            .then(setIdle);
-        }
-
-        button.addEventListener('click', function () {
-          if (recording) {
-            mediaRecorder.stop();
-            return;
-          }
-          navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-            chunks = [];
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.addEventListener('dataavailable', function (e) {
-              if (e.data.size > 0) chunks.push(e.data);
-            });
-            mediaRecorder.addEventListener('stop', function () {
-              stream.getTracks().forEach(function (t) { t.stop(); });
-              var mimeType = mediaRecorder.mimeType || 'audio/webm';
-              var extension = mimeType.indexOf('mp4') !== -1 ? 'm4a' : 'webm';
-              sendForTranscription(new Blob(chunks, { type: mimeType }), extension);
-            });
-            mediaRecorder.start();
-            recording = true;
-            button.classList.add('dictate-button--active');
-            button.textContent = '⏹ Stop';
-          }).catch(function () {
-            alert("Couldn't access the microphone — check your browser's permission for this site.");
-          });
-        });
-      });
-    })();
-  </script>
 
 {% endblock %}

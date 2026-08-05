@@ -273,15 +273,29 @@ project for one person or a couple (e.g. "The Life of Mavji & Radha").
 
 An admin starts one from "+ New Book" by picking one person, or a couple,
 as the subject. From then on, the subject's own video interviews (already
-logged under "Videos") automatically form the spine of the book, and
-everyone else in the family who visits that book's page is shown a set of
-interview questions tailored to how they're related to the subject —
-children get the deepest set (their own upbringing, the subject's life
-before them, who the subject was as a parent), sons/daughters-in-law get
-a set about joining the family, grandchildren and great-grandchildren get
-shorter, more personal sets, and anyone else gets a small general set.
-Answers save per-person and can be revisited/edited any time. Each
-question box has a **"🎤 Dictate"** button — click it, speak your
+logged under "Videos") automatically form the spine of the book.
+
+Clicking into a book lands on an overview page first — a few stats
+(how many people have submitted their answers, photos selected,
+interviews logged, memories from friends), a "Photos" section, and a
+**"Your questions"** card showing your own status (not started,
+still a draft, or already submitted). That card links out to a
+separate page with the actual questions — tailored to how you're
+related to the subject: children get the deepest set (their own
+upbringing, the subject's life before them, who the subject was as a
+parent), sons/daughters-in-law get a set about joining the family,
+grandchildren and great-grandchildren get shorter, more personal sets,
+and anyone else gets a small general set.
+
+Answers save as a draft as many times as you like — click **"Save
+draft"** and come back to it later. Nothing is final until you click
+**"Submit your answers"**, which locks them in permanently: the
+question page becomes read-only, and there's no self-service way to
+edit again afterward. If someone submits by mistake, an admin can
+"Unlock" their answers from the book's overview page, which lets them
+edit and re-submit.
+
+Each question box has a **"🎤 Dictate"** button — click it, speak your
 answer, click "⏹ Stop," and the recording is sent to be transcribed
 (OpenAI's Whisper) and dropped into the box a few seconds later.
 This replaced an earlier version that used the browser's own free,

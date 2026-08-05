@@ -1857,20 +1857,22 @@ def show_book(book_id):
     relationship = classify_relationship(subject_ids, viewer_id)
 
     questions = db.execute(
-        "SELECT * FROM book_questions WHERE book_project_id = ? AND target_relationship = ? ORDER BY sort_order",
+        "SELECT id FROM book_questions WHERE book_project_id = ? AND target_relationship = ?",
         (book_id, relationship),
     ).fetchall()
 
-    existing_answers = {
-        row["question_id"]: row["answer_text"]
-        for row in db.execute(
-            "SELECT question_id, answer_text FROM book_answers WHERE book_project_id = ? AND person_id = ?",
-            (book_id, viewer_id),
-        )
-    }
+    viewer_submission = db.execute(
+        "SELECT * FROM book_submissions WHERE book_project_id = ? AND person_id = ?",
+        (book_id, viewer_id),
+    ).fetchone()
 
-    contributor_count = db.execute(
-        "SELECT COUNT(DISTINCT person_id) AS c FROM book_answers WHERE book_project_id = ?",
+    has_draft_answers = db.execute(
+        "SELECT 1 FROM book_answers WHERE book_project_id = ? AND person_id = ?",
+        (book_id, viewer_id),
+    ).fetchone() is not None
+
+    submitted_count = db.execute(
+        "SELECT COUNT(*) AS c FROM book_submissions WHERE book_project_id = ?",
         (book_id,),
     ).fetchone()["c"]
 
@@ -1890,6 +1892,7 @@ def show_book(book_id):
     ).fetchall()
 
     pending_guest_contributions = []
+    submitted_people = []
     viewer = current_person()
     if viewer and viewer["is_admin"]:
         pending_guest_contributions = db.execute(
@@ -1902,15 +1905,27 @@ def show_book(book_id):
             """,
             (book_id,),
         ).fetchall()
+        submitted_people = db.execute(
+            """
+            SELECT people.id AS person_id, people.name, book_submissions.submitted_at
+            FROM book_submissions
+            JOIN people ON people.id = book_submissions.person_id
+            WHERE book_submissions.book_project_id = ?
+            ORDER BY book_submissions.submitted_at
+            """,
+            (book_id,),
+        ).fetchall()
 
     return render_template(
         "book.html",
         book=book,
+        submitted_people=submitted_people,
         subjects=subjects,
         entries=entries,
-        questions=questions,
-        existing_answers=existing_answers,
-        contributor_count=contributor_count,
+        has_questions=len(questions) > 0,
+        viewer_submission=viewer_submission,
+        has_draft_answers=has_draft_answers,
+        submitted_count=submitted_count,
         photo_count=photo_count,
         approved_guest_contributions=approved_guest_contributions,
         pending_guest_contributions=pending_guest_contributions,
@@ -1950,6 +1965,44 @@ def edit_book_questions(book_id):
     )
 
 
+@app.route("/books/<int:book_id>/answer")
+def book_answer(book_id):
+    db = get_db()
+    book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        return "Book not found", 404
+
+    subject_ids = [
+        row["person_id"] for row in
+        db.execute("SELECT person_id FROM book_subjects WHERE book_project_id = ?", (book_id,))
+    ]
+    viewer_id = session["person_id"]
+    relationship = classify_relationship(subject_ids, viewer_id)
+
+    questions = db.execute(
+        "SELECT * FROM book_questions WHERE book_project_id = ? AND target_relationship = ? ORDER BY sort_order",
+        (book_id, relationship),
+    ).fetchall()
+
+    existing_answers = {
+        row["question_id"]: row["answer_text"]
+        for row in db.execute(
+            "SELECT question_id, answer_text FROM book_answers WHERE book_project_id = ? AND person_id = ?",
+            (book_id, viewer_id),
+        )
+    }
+
+    submission = db.execute(
+        "SELECT * FROM book_submissions WHERE book_project_id = ? AND person_id = ?",
+        (book_id, viewer_id),
+    ).fetchone()
+
+    return render_template(
+        "book_answer.html", book=book, questions=questions,
+        existing_answers=existing_answers, submission=submission,
+    )
+
+
 @app.route("/books/<int:book_id>/answers", methods=["POST"])
 def submit_book_answers(book_id):
     db = get_db()
@@ -1958,6 +2011,14 @@ def submit_book_answers(book_id):
         return "Book not found", 404
 
     viewer_id = session["person_id"]
+    already_submitted = db.execute(
+        "SELECT 1 FROM book_submissions WHERE book_project_id = ? AND person_id = ?",
+        (book_id, viewer_id),
+    ).fetchone()
+    if already_submitted:
+        flash("Your answers are already submitted and locked in — ask an admin if something needs to change.")
+        return redirect(url_for("book_answer", book_id=book_id))
+
     for key, value in request.form.items():
         if not key.startswith("question_"):
             continue
@@ -1975,7 +2036,37 @@ def submit_book_answers(book_id):
             (book_id, question_id, viewer_id, answer_text),
         )
     db.commit()
-    flash("Your answers have been saved.")
+    flash("Your draft has been saved.")
+    return redirect(url_for("book_answer", book_id=book_id))
+
+
+@app.route("/books/<int:book_id>/answers/submit", methods=["POST"])
+def finalize_book_answers(book_id):
+    db = get_db()
+    book = db.execute("SELECT * FROM book_projects WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        return "Book not found", 404
+
+    viewer_id = session["person_id"]
+    db.execute(
+        "INSERT OR IGNORE INTO book_submissions (book_project_id, person_id) VALUES (?, ?)",
+        (book_id, viewer_id),
+    )
+    db.commit()
+    flash("Your answers have been submitted and locked in — thank you.")
+    return redirect(url_for("show_book", book_id=book_id))
+
+
+@app.route("/books/<int:book_id>/answers/unlock/<int:person_id>", methods=["POST"])
+@require_admin
+def unlock_book_answers(book_id, person_id):
+    db = get_db()
+    db.execute(
+        "DELETE FROM book_submissions WHERE book_project_id = ? AND person_id = ?",
+        (book_id, person_id),
+    )
+    db.commit()
+    flash("Answers unlocked — they can be edited again.")
     return redirect(url_for("show_book", book_id=book_id))
 
 

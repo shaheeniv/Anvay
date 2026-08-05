@@ -171,6 +171,18 @@ CREATE TABLE IF NOT EXISTS book_answers (
     UNIQUE(book_project_id, question_id, person_id)
 );
 
+-- Marks one person's answers for one book as final. book_answers rows
+-- stay freely editable (save-as-you-go drafts) right up until a row
+-- exists here -- after that, submit_book_answers() refuses further
+-- edits. An admin can delete this row to unlock someone's answers again
+-- if they submitted by mistake.
+CREATE TABLE IF NOT EXISTS book_submissions (
+    book_project_id INTEGER NOT NULL REFERENCES book_projects(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (book_project_id, person_id)
+);
+
 -- Which existing Contributions-feed photos (kind='photo') are relevant to
 -- a given Legacy Book. Photos are only ever added in one place — the
 -- Contributions feed — a book just marks which ones apply to it, for use
