@@ -281,11 +281,16 @@ before them, who the subject was as a parent), sons/daughters-in-law get
 a set about joining the family, grandchildren and great-grandchildren get
 shorter, more personal sets, and anyone else gets a small general set.
 Answers save per-person and can be revisited/edited any time. Each
-question box has a **"🎤 Dictate"** button — click it and speak instead
-of typing, using your browser's own built-in speech recognition (the
-same technology as iPhone dictation). It's free, needs no setup, and
-works well for English. Supported in Safari and Chrome; if your browser
-doesn't support it, the button simply won't appear.
+question box has a **"🎤 Dictate"** button — click it, speak your
+answer, click "⏹ Stop," and the recording is sent to be transcribed
+(OpenAI's Whisper) and dropped into the box a few seconds later.
+This replaced an earlier version that used the browser's own free,
+built-in speech recognition — that was noticeably worse at accented
+English, so this trades a small per-use cost (a fraction of a cent per
+answer) for meaningfully better accuracy. Needs `OPENAI_API_KEY` set as
+an environment variable (see below); without it, the button still
+shows but flashes an error instead of transcribing. Needs microphone
+access, which the browser will prompt for on first use.
 
 Every new book starts with a default set of questions (an admin can
 customize it — see below), but **each book gets its own independent

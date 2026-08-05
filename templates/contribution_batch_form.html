@@ -16,7 +16,7 @@
 
   {% if people %}
   <form class="entry-form" method="post" enctype="multipart/form-data" action="{{ url_for('create_photo_batch') }}">
-    <label for="photos">Photos</label>
+    <label for="photos">Photos <span class="hint">(PNG, JPG, GIF, or WEBP)</span></label>
     <input type="file" id="photos" name="photos" accept="image/png,image/jpeg,image/gif,image/webp" multiple required>
 
     <label for="title">Caption <span class="hint">(shared by all these photos)</span></label>

@@ -685,6 +685,11 @@ h2 {
   color: #fff;
 }
 
+.dictate-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Family tree — connector-line branch diagram
    The lines themselves are drawn by JS (see tree.html) after the browser
    lays out the boxes, using their real measured positions — a parent may

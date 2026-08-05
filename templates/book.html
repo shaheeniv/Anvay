@@ -124,69 +124,78 @@
   </section>
 
   <script>
-    // Lets someone speak an answer instead of typing it, using the
-    // browser's own built-in speech recognition (same tech as iPhone
-    // dictation) — no server, no account, no cost. Safari and Chrome
-    // support this; browsers that don't just won't show the button.
+    // Lets someone speak an answer instead of typing it. Records audio
+    // right in the browser, then sends it to the server to be
+    // transcribed (OpenAI's Whisper) — meaningfully more accurate than
+    // relying on the browser's own built-in speech recognition,
+    // especially for accented English, at a small per-use cost.
     (function () {
-      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      var buttons = document.querySelectorAll('.dictate-button');
-      if (!SpeechRecognition) {
-        buttons.forEach(function (button) { button.style.display = 'none'; });
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        document.querySelectorAll('.dictate-button').forEach(function (b) { b.style.display = 'none'; });
         return;
       }
 
-      buttons.forEach(function (button) {
+      document.querySelectorAll('.dictate-button').forEach(function (button) {
         var textarea = document.getElementById(button.dataset.dictateTarget);
         if (!textarea) return;
 
-        var recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-GB';
+        var mediaRecorder = null;
+        var chunks = [];
+        var recording = false;
 
-        var listening = false;
-        var baseText = '';
+        function appendText(text) {
+          var sep = textarea.value && !/\s$/.test(textarea.value) ? ' ' : '';
+          textarea.value += sep + text;
+        }
 
-        button.addEventListener('click', function () {
-          if (listening) {
-            recognition.stop();
-            return;
-          }
-          baseText = textarea.value;
-          if (baseText && !/\s$/.test(baseText)) baseText += ' ';
-          recognition.start();
-        });
-
-        recognition.addEventListener('start', function () {
-          listening = true;
-          button.classList.add('dictate-button--active');
-          button.textContent = '⏹ Stop';
-        });
-
-        recognition.addEventListener('end', function () {
-          listening = false;
+        function setIdle() {
+          recording = false;
+          button.disabled = false;
           button.classList.remove('dictate-button--active');
           button.textContent = '🎤 Dictate';
-        });
+        }
 
-        recognition.addEventListener('result', function (event) {
-          var interim = '';
-          var final = '';
-          for (var i = event.resultIndex; i < event.results.length; i++) {
-            var transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-              final += transcript;
-            } else {
-              interim += transcript;
-            }
+        function sendForTranscription(blob, extension) {
+          button.disabled = true;
+          button.textContent = 'Transcribing…';
+          var formData = new FormData();
+          formData.append('audio', blob, 'dictation.' + extension);
+          fetch('{{ url_for("dictate") }}', { method: 'POST', body: formData })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+              if (data.text) appendText(data.text);
+              if (data.error) alert(data.error);
+            })
+            .catch(function () {
+              alert('Something went wrong sending that to be transcribed.');
+            })
+            .then(setIdle);
+        }
+
+        button.addEventListener('click', function () {
+          if (recording) {
+            mediaRecorder.stop();
+            return;
           }
-          if (final) baseText += final;
-          textarea.value = baseText + interim;
-        });
-
-        recognition.addEventListener('error', function (event) {
-          console.warn('Dictation error:', event.error);
+          navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+            chunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.addEventListener('dataavailable', function (e) {
+              if (e.data.size > 0) chunks.push(e.data);
+            });
+            mediaRecorder.addEventListener('stop', function () {
+              stream.getTracks().forEach(function (t) { t.stop(); });
+              var mimeType = mediaRecorder.mimeType || 'audio/webm';
+              var extension = mimeType.indexOf('mp4') !== -1 ? 'm4a' : 'webm';
+              sendForTranscription(new Blob(chunks, { type: mimeType }), extension);
+            });
+            mediaRecorder.start();
+            recording = true;
+            button.classList.add('dictate-button--active');
+            button.textContent = '⏹ Stop';
+          }).catch(function () {
+            alert("Couldn't access the microphone — check your browser's permission for this site.");
+          });
         });
       });
     })();

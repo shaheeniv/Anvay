@@ -16,6 +16,7 @@ import json
 import os
 import secrets
 import sqlite3
+import tempfile
 import urllib.error
 import urllib.request
 import uuid
@@ -24,7 +25,8 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, flash, g, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from openai import OpenAI
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -49,6 +51,9 @@ ALLOWED_VIDEO_EXTENSIONS = {"mp4", "mov", "m4v", "avi", "webm"}
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 FROM_EMAIL = "Anvay <login@anvay.uk>"
 RESET_TOKEN_LIFETIME_HOURS = 24
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 CONTRIBUTION_KINDS = [
     ("memory", "Memory"),
@@ -2128,6 +2133,38 @@ def reject_guest_contribution(book_id, contribution_id):
     db.commit()
     flash("Contribution rejected.")
     return redirect(url_for("show_book", book_id=book_id))
+
+
+# ---------------------------------------------------------------------------
+# Dictation — records a short answer as audio in the browser and sends it
+# here to be transcribed via OpenAI's Whisper API. Not tied to Legacy
+# Books specifically (the browser side just needs a textarea to fill in),
+# but that's the only place it's used today. Nothing about the audio is
+# stored — it's written to a temp file only long enough to send to
+# Whisper, then discarded.
+# ---------------------------------------------------------------------------
+
+@app.route("/dictate", methods=["POST"])
+def dictate():
+    if openai_client is None:
+        return jsonify(error="Dictation isn't set up on this server yet."), 503
+
+    audio_file = request.files.get("audio")
+    if audio_file is None or not audio_file.filename:
+        return jsonify(error="No audio was received."), 400
+
+    suffix = Path(audio_file.filename).suffix or ".webm"
+    with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
+        audio_file.save(tmp.name)
+        try:
+            with open(tmp.name, "rb") as f:
+                transcript = openai_client.audio.transcriptions.create(
+                    model="whisper-1", file=f, language="en",
+                )
+        except Exception as e:
+            return jsonify(error=f"Transcription failed: {e}"), 502
+
+    return jsonify(text=transcript.text.strip())
 
 
 if not DATABASE.exists():

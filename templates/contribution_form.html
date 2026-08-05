@@ -40,7 +40,7 @@
     <textarea id="body" name="body" rows="8"
       placeholder="The memory, story, or the why behind this tradition…">{{ (contribution['body'] or '') if contribution else '' }}</textarea>
 
-    <label for="photo">Photo <span class="hint">(optional)</span></label>
+    <label for="photo">Photo <span class="hint">(optional — PNG, JPG, GIF, or WEBP)</span></label>
     <input type="file" id="photo" name="photo" accept="image/png,image/jpeg,image/gif,image/webp">
     {% if contribution and contribution['photo_filename'] %}
       <p class="hint">Currently has a photo attached — choosing a new one will replace it.</p>
