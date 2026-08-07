@@ -57,7 +57,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 CONTRIBUTION_KINDS = [
     ("memory", "Memory"),
-    ("photo", "Photo"),
+    ("photo", "Photo / Video"),
     ("story", "Story"),
     ("tradition", "Tradition"),
 ]
@@ -233,7 +233,7 @@ def current_person():
 
 @app.context_processor
 def inject_current_person():
-    return {"current_person": current_person()}
+    return {"current_person": current_person(), "current_year": date.today().year}
 
 
 def require_admin(view):
@@ -467,8 +467,8 @@ def dashboard():
     recent_photos = [
         row for row in db.execute(
             """
-            SELECT id, title, photo_filename FROM contributions
-            WHERE kind = 'photo' AND photo_filename IS NOT NULL
+            SELECT id, title, photo_filename, video_filename FROM contributions
+            WHERE kind = 'photo' AND (photo_filename IS NOT NULL OR video_filename IS NOT NULL)
             ORDER BY created_at DESC LIMIT 12
             """
         )
@@ -1382,6 +1382,21 @@ def save_photo_upload(file_storage):
     return filename
 
 
+def save_photo_or_video_upload(file_storage):
+    """A contribution's media slot accepts either a photo or a video —
+    dispatches by file extension to whichever save function matches.
+    Returns (photo_filename, video_filename); at most one is set."""
+    if not file_storage or not file_storage.filename:
+        return None, None
+    ext = file_storage.filename.rsplit(".", 1)[-1].lower() if "." in file_storage.filename else ""
+    if ext in ALLOWED_VIDEO_EXTENSIONS:
+        return None, save_video_upload(file_storage)
+    if ext in ALLOWED_PHOTO_EXTENSIONS:
+        return save_photo_upload(file_storage), None
+    flash(f"Not saved — \"{file_storage.filename}\" isn't a supported photo or video type.")
+    return None, None
+
+
 def get_linked_people(contribution_id):
     db = get_db()
     return db.execute(
@@ -1443,17 +1458,27 @@ def new_contribution():
 @app.route("/feed", methods=["POST"])
 def create_contribution():
     db = get_db()
-    photo_filename = save_photo_upload(request.files.get("photo"))
+    photo_filename, video_filename = save_photo_or_video_upload(request.files.get("media"))
+    event_month = request.form.get("event_month", type=int)
+    event_year = request.form.get("event_year", type=int)
+    if (photo_filename or video_filename) and not (event_month and event_year):
+        flash("Choose a month and year for this photo or video.")
+        return redirect(url_for("new_contribution"))
     cur = db.execute(
         """
-        INSERT INTO contributions (kind, title, body, photo_filename, author_id)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO contributions
+            (kind, title, body, photo_filename, video_filename, event_month, event_year, location, author_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             request.form["kind"],
             request.form["title"].strip(),
             request.form.get("body", "").strip(),
             photo_filename,
+            video_filename,
+            event_month,
+            event_year,
+            request.form.get("location", "").strip() or None,
             request.form.get("author_id") or None,
         ),
     )
@@ -1479,29 +1504,39 @@ def create_photo_batch():
     db = get_db()
     files = [f for f in request.files.getlist("photos") if f and f.filename]
     if not files:
-        flash("Choose at least one photo to upload.")
+        flash("Choose at least one photo or video to upload.")
         return redirect(url_for("new_photo_batch"))
 
     title = request.form["title"].strip()
     body = request.form.get("body", "").strip()
     author_id = request.form.get("author_id") or None
     person_ids = [int(pid) for pid in request.form.getlist("person_ids")]
+    event_month = request.form.get("event_month", type=int)
+    event_year = request.form.get("event_year", type=int)
+    location = request.form.get("location", "").strip() or None
+    if not (event_month and event_year):
+        flash("Choose a month and year for this batch.")
+        return redirect(url_for("new_photo_batch"))
 
     saved_count = 0
     for file_storage in files:
-        photo_filename = save_photo_upload(file_storage)
-        if photo_filename is None:
+        photo_filename, video_filename = save_photo_or_video_upload(file_storage)
+        if not photo_filename and not video_filename:
             continue
         cur = db.execute(
-            "INSERT INTO contributions (kind, title, body, photo_filename, author_id) VALUES ('photo', ?, ?, ?, ?)",
-            (title, body, photo_filename, author_id),
+            """
+            INSERT INTO contributions
+                (kind, title, body, photo_filename, video_filename, event_month, event_year, location, author_id)
+            VALUES ('photo', ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (title, body, photo_filename, video_filename, event_month, event_year, location, author_id),
         )
         set_linked_people(cur.lastrowid, person_ids)
         saved_count += 1
     db.commit()
 
     if saved_count:
-        flash(f"Added {saved_count} photo{'s' if saved_count != 1 else ''}.")
+        flash(f"Added {saved_count} item{'s' if saved_count != 1 else ''}.")
     return redirect(url_for("feed", kind="photo"))
 
 
@@ -1542,38 +1577,37 @@ def edit_contribution(contribution_id):
 @app.route("/feed/<int:contribution_id>/update", methods=["POST"])
 def update_contribution(contribution_id):
     db = get_db()
-    photo_filename = save_photo_upload(request.files.get("photo"))
-    if photo_filename:
-        db.execute(
-            """
-            UPDATE contributions
-            SET kind = ?, title = ?, body = ?, photo_filename = ?, author_id = ?
-            WHERE id = ?
-            """,
-            (
-                request.form["kind"],
-                request.form["title"].strip(),
-                request.form.get("body", "").strip(),
-                photo_filename,
-                request.form.get("author_id") or None,
-                contribution_id,
-            ),
-        )
-    else:
-        db.execute(
-            """
-            UPDATE contributions
-            SET kind = ?, title = ?, body = ?, author_id = ?
-            WHERE id = ?
-            """,
-            (
-                request.form["kind"],
-                request.form["title"].strip(),
-                request.form.get("body", "").strip(),
-                request.form.get("author_id") or None,
-                contribution_id,
-            ),
-        )
+    existing = db.execute(
+        "SELECT photo_filename, video_filename FROM contributions WHERE id = ?", (contribution_id,)
+    ).fetchone()
+    photo_filename, video_filename = save_photo_or_video_upload(request.files.get("media"))
+    if not photo_filename and not video_filename:
+        photo_filename, video_filename = existing["photo_filename"], existing["video_filename"]
+    event_month = request.form.get("event_month", type=int)
+    event_year = request.form.get("event_year", type=int)
+    if (photo_filename or video_filename) and not (event_month and event_year):
+        flash("Choose a month and year for this photo or video.")
+        return redirect(url_for("edit_contribution", contribution_id=contribution_id))
+    db.execute(
+        """
+        UPDATE contributions
+        SET kind = ?, title = ?, body = ?, photo_filename = ?, video_filename = ?,
+            event_month = ?, event_year = ?, location = ?, author_id = ?
+        WHERE id = ?
+        """,
+        (
+            request.form["kind"],
+            request.form["title"].strip(),
+            request.form.get("body", "").strip(),
+            photo_filename,
+            video_filename,
+            event_month,
+            event_year,
+            request.form.get("location", "").strip() or None,
+            request.form.get("author_id") or None,
+            contribution_id,
+        ),
+    )
     db.commit()
     person_ids = [int(pid) for pid in request.form.getlist("person_ids")]
     set_linked_people(contribution_id, person_ids)
@@ -2095,7 +2129,8 @@ def book_photos(book_id):
 
     photo_contributions = db.execute(
         CONTRIBUTION_QUERY
-        + " WHERE contributions.kind = 'photo' AND contributions.photo_filename IS NOT NULL"
+        + " WHERE contributions.kind = 'photo'"
+        " AND (contributions.photo_filename IS NOT NULL OR contributions.video_filename IS NOT NULL)"
         " ORDER BY contributions.created_at DESC"
     ).fetchall()
     selected_ids = {

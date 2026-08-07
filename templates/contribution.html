@@ -7,7 +7,13 @@
       <span class="kind-badge kind-{{ contribution['kind'] }}">{{ kind_labels[contribution['kind']] }}</span>
       <h1>{{ contribution['title'] }}</h1>
       <p class="entry-meta">
-        {{ contribution['created_at'][:10] }}
+        {% if contribution['event_month'] and contribution['event_year'] %}
+          {{ ['January','February','March','April','May','June','July','August','September','October','November','December'][contribution['event_month'] - 1] }}
+          {{ contribution['event_year'] }}
+        {% else %}
+          {{ contribution['created_at'][:10] }}
+        {% endif %}
+        {% if contribution['location'] %} · {{ contribution['location'] }}{% endif %}
         {% if contribution['author_name'] %} · added by {{ contribution['author_name'] }}{% endif %}
       </p>
     </div>
@@ -19,6 +25,10 @@
   {% if contribution['photo_filename'] %}
     <p class="contribution-photo">
       <img src="{{ url_for('uploaded_file', filename=contribution['photo_filename']) }}" alt="{{ contribution['title'] }}">
+    </p>
+  {% elif contribution['video_filename'] %}
+    <p class="contribution-photo">
+      <video controls src="{{ url_for('uploaded_video', filename=contribution['video_filename']) }}"></video>
     </p>
   {% endif %}
 

@@ -16,7 +16,7 @@
     relevant to this book here; they can be used when it's compiled. To
     add a new photo to the archive first, go to
     <a href="{{ url_for('new_contribution') }}">+ Add a contribution</a>
-    (type "Photo"), then come back here to select it.
+    (type "Photo / Video"), then come back here to select it.
   </p>
 
   {% if photo_contributions %}
@@ -25,7 +25,11 @@
         {% for c in photo_contributions %}
           <li class="book-photo-card">
             <a href="{{ url_for('show_contribution', contribution_id=c['id']) }}">
-              <img src="{{ url_for('uploaded_file', filename=c['photo_filename']) }}" alt="{{ c['title'] }}">
+              {% if c['photo_filename'] %}
+                <img src="{{ url_for('uploaded_file', filename=c['photo_filename']) }}" alt="{{ c['title'] }}">
+              {% else %}
+                <video src="{{ url_for('uploaded_video', filename=c['video_filename']) }}" muted playsinline></video>
+              {% endif %}
             </a>
             <div class="book-photo-info">
               <p class="book-photo-caption">{{ c['title'] }}</p>
@@ -46,7 +50,7 @@
   {% else %}
     <p class="empty-state">
       No photos in the Contributions feed yet —
-      <a href="{{ url_for('new_contribution') }}">add one</a> (type "Photo") first.
+      <a href="{{ url_for('new_contribution') }}">add one</a> (type "Photo / Video") first.
     </p>
   {% endif %}
 

@@ -40,11 +40,35 @@
     <textarea id="body" name="body" rows="8"
       placeholder="The memory, story, or the why behind this tradition…">{{ (contribution['body'] or '') if contribution else '' }}</textarea>
 
-    <label for="photo">Photo <span class="hint">(optional — PNG, JPG, GIF, or WEBP)</span></label>
-    <input type="file" id="photo" name="photo" accept="image/png,image/jpeg,image/gif,image/webp">
-    {% if contribution and contribution['photo_filename'] %}
-      <p class="hint">Currently has a photo attached — choosing a new one will replace it.</p>
+    <label for="media">Photo or video <span class="hint">(optional — PNG, JPG, GIF, WEBP, MP4, MOV, M4V, or WEBM)</span></label>
+    <input type="file" id="media" name="media"
+      accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
+      onchange="document.getElementById('event_month').required = document.getElementById('event_year').required = !!this.files.length;">
+    {% if contribution and (contribution['photo_filename'] or contribution['video_filename']) %}
+      <p class="hint">Currently has a {{ 'video' if contribution['video_filename'] else 'photo' }} attached — choosing a new one will replace it.</p>
     {% endif %}
+
+    <label for="event_month">When was this taken? <span class="hint">(required if adding a photo or video)</span></label>
+    <div class="inline-fields">
+      <select id="event_month" name="event_month"
+        {% if contribution and (contribution['photo_filename'] or contribution['video_filename']) %}required{% endif %}>
+        <option value="">Month</option>
+        {% for m, label in [(1,'January'),(2,'February'),(3,'March'),(4,'April'),(5,'May'),(6,'June'),(7,'July'),(8,'August'),(9,'September'),(10,'October'),(11,'November'),(12,'December')] %}
+          <option value="{{ m }}" {% if contribution and contribution['event_month'] == m %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select id="event_year" name="event_year"
+        {% if contribution and (contribution['photo_filename'] or contribution['video_filename']) %}required{% endif %}>
+        <option value="">Year</option>
+        {% for y in range(current_year, 1899, -1) %}
+          <option value="{{ y }}" {% if contribution and contribution['event_year'] == y %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <label for="location">Location <span class="hint">(optional)</span></label>
+    <input type="text" id="location" name="location" placeholder="e.g. Nairobi, Kenya"
+      value="{{ contribution['location'] if contribution and contribution['location'] else '' }}">
 
     <label>Linked family members <span class="hint">(optional — who is this about?)</span></label>
     <div class="checkbox-list">

@@ -67,6 +67,10 @@ CREATE TABLE IF NOT EXISTS contributions (
     title TEXT NOT NULL,
     body TEXT,                          -- the story/context/why behind it
     photo_filename TEXT,                -- optional, stored under static/uploads/
+    video_filename TEXT,                -- optional, stored under DATA_DIR/videos/ (mutually exclusive with photo_filename)
+    event_month INTEGER,                -- 1-12, when the photo/video was actually taken (not when it was uploaded)
+    event_year INTEGER,
+    location TEXT,                      -- optional, e.g. "Nairobi, Kenya"
     author_id INTEGER REFERENCES people(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

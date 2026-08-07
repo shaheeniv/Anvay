@@ -56,7 +56,12 @@
         {% for p in recent_photos %}
           <li class="photo-gallery-item">
             <a href="{{ url_for('show_contribution', contribution_id=p['id']) }}">
-              <img src="{{ url_for('uploaded_file', filename=p['photo_filename']) }}" alt="{{ p['title'] }}">
+              {% if p['photo_filename'] %}
+                <img src="{{ url_for('uploaded_file', filename=p['photo_filename']) }}" alt="{{ p['title'] }}">
+              {% else %}
+                <video src="{{ url_for('uploaded_video', filename=p['video_filename']) }}" muted playsinline></video>
+                <span class="photo-gallery-video-badge">&#9654;</span>
+              {% endif %}
               <span class="photo-gallery-caption">{{ p['title'] }}</span>
             </a>
           </li>

@@ -7,20 +7,40 @@
   </div>
 
   <p class="hint">
-    Pick multiple photos at once — handy when you're uploading straight
-    from your phone after an event. They'll share the same caption and
-    tagged people; each still becomes its own photo in the Contributions
-    feed, so they can be viewed, tagged, and used in Legacy Books
-    individually afterwards.
+    Pick multiple photos or videos at once — handy when you're uploading
+    straight from your phone after an event. They'll share the same
+    caption, date, and tagged people; each still becomes its own item in
+    the Contributions feed, so they can be viewed, tagged, and used in
+    Legacy Books individually afterwards.
   </p>
 
   {% if people %}
   <form class="entry-form" method="post" enctype="multipart/form-data" action="{{ url_for('create_photo_batch') }}">
-    <label for="photos">Photos <span class="hint">(PNG, JPG, GIF, or WEBP)</span></label>
-    <input type="file" id="photos" name="photos" accept="image/png,image/jpeg,image/gif,image/webp" multiple required>
+    <label for="photos">Photos or videos <span class="hint">(PNG, JPG, GIF, WEBP, MP4, MOV, M4V, or WEBM)</span></label>
+    <input type="file" id="photos" name="photos"
+      accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm" multiple required>
 
-    <label for="title">Caption <span class="hint">(shared by all these photos)</span></label>
+    <label for="title">Caption <span class="hint">(shared by all these)</span></label>
     <input type="text" id="title" name="title" required placeholder="e.g. Diwali 2026">
+
+    <label for="event_month">When were these taken? <span class="hint">(required)</span></label>
+    <div class="inline-fields">
+      <select id="event_month" name="event_month" required>
+        <option value="">Month</option>
+        {% for m, label in [(1,'January'),(2,'February'),(3,'March'),(4,'April'),(5,'May'),(6,'June'),(7,'July'),(8,'August'),(9,'September'),(10,'October'),(11,'November'),(12,'December')] %}
+          <option value="{{ m }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select id="event_year" name="event_year" required>
+        <option value="">Year</option>
+        {% for y in range(current_year, 1899, -1) %}
+          <option value="{{ y }}">{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <label for="location">Location <span class="hint">(optional)</span></label>
+    <input type="text" id="location" name="location" placeholder="e.g. Nairobi, Kenya">
 
     <label for="author_id">Added by</label>
     <select id="author_id" name="author_id">
@@ -44,7 +64,7 @@
     </div>
 
     <div class="form-actions">
-      <button type="submit" class="button">Upload photos</button>
+      <button type="submit" class="button">Upload</button>
       <a class="cancel-link" href="{{ url_for('feed') }}">Cancel</a>
     </div>
   </form>
